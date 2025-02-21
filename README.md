@@ -1,6 +1,6 @@
 # serve_byte_range
 
-is a small utility for serving HTTP `Range` responses (partial content responses) from your Rails or Rack app. It will allow you to output partial content in a lazy manner without buffering, and perform correct encoding of `multipart/byte-range` responses.
+is a small utility for serving HTTP `Range` responses (partial content responses) from your Rails or Rack app. It will allow you to output partial content in a lazy manner without buffering, and perform correct encoding of `multipart/byte-range` responses. It will also make serving byte ranges safer because it coalesces the requested byte ranges into larger, consecutive ranges - reducing overhead.
 
 ## Installation and usage
 
