@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "bundler"
 Bundler.setup
 
@@ -137,6 +139,20 @@ class ServeByteRangeTest < Minitest::Test
     assert_equal reference_lines, lines
   end
 
+  def test_serves_not_modified_with_just_an_if_none_match
+    rng = Random.new(Minitest.seed)
+    bytes = rng.bytes(474)
+    serve_proc = ->(range, io) {
+      io.write(bytes[range])
+    }
+
+    env = {"HTTP_IF_NONE_MATCH" => "\"woof\""}
+    status, headers, _ = ServeByteRange.serve_ranges(env, resource_size: bytes.bytesize, etag: "\"woof\"", resource_content_type: "x-foo/bar", &serve_proc)
+
+    assert_equal 304, status
+    assert_equal({"Accept-Ranges" => "bytes", "Content-Length" => "0", "ETag" => "\"woof\""}, headers)
+  end
+
   def test_serves_entire_document_on_if_range_header_mismatch
     rng = Random.new(Minitest.seed)
     bytes = rng.bytes(474)
@@ -145,7 +161,7 @@ class ServeByteRangeTest < Minitest::Test
     }
 
     env = {"HTTP_RANGE" => "bytes=1-2,4-9,472-", "HTTP_IF_RANGE" => "\"v2\""}
-    status, headers, body = ServeByteRange.serve_ranges(env, resource_size: bytes.bytesize, etag: "\"v3\"", multipart_boundary: "azuleju", resource_content_type: "x-foo/bar", &serve_proc)
+    status, headers, _ = ServeByteRange.serve_ranges(env, resource_size: bytes.bytesize, etag: "\"v3\"", multipart_boundary: "azuleju", resource_content_type: "x-foo/bar", &serve_proc)
 
     assert_equal 200, status
     assert_equal({"Accept-Ranges" => "bytes", "Content-Length" => "474", "Content-Type" => "x-foo/bar", "ETag" => "\"v3\""}, headers)
@@ -159,7 +175,7 @@ class ServeByteRangeTest < Minitest::Test
     }
 
     env = {"HTTP_RANGE" => "bytes=1-2,4-9,472-"}
-    status, headers, body = ServeByteRange.serve_ranges(env, resource_size: bytes.bytesize, etag: "AbCehZ", &serve_proc)
+    status, headers, _ = ServeByteRange.serve_ranges(env, resource_size: bytes.bytesize, etag: "AbCehZ", &serve_proc)
 
     assert_equal 206, status
     assert_equal "335", headers["Content-Length"]

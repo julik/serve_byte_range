@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "rack"
 
 module ServeByteRange
@@ -76,6 +78,12 @@ module ServeByteRange
         "Accept-Ranges" => "bytes",
         "Content-Length" => content_length.to_s
       }
+    end
+  end
+
+  class NotModifiedBody < EmptyBody
+    def status
+      304
     end
   end
 
@@ -253,12 +261,15 @@ module ServeByteRange
     # using a 200 (OK) response.
     wants_ranges_and_etag_valid = env["HTTP_IF_RANGE"] && env["HTTP_IF_RANGE"] == etag && env["HTTP_RANGE"]
     wants_ranges_and_no_etag = !env["HTTP_IF_RANGE"] && env["HTTP_RANGE"]
+    wants_no_ranges_and_supplies_etag = env["HTTP_IF_NONE_MATCH"] && !env["HTTP_RANGE"] && !env["HTTP_IF_RANGE"]
 
     # Very old Rack versions do not have get_byte_ranges and have just byte_ranges
     http_ranges_from_header = Rack::Utils.respond_to?(:get_byte_ranges) ? Rack::Utils.get_byte_ranges(env["HTTP_RANGE"], resource_size) : Rack::Utils.byte_ranges(env, resource_size)
     http_ranges_from_header = coalesce_ranges(http_ranges_from_header) if http_ranges_from_header
 
-    body = if resource_size.zero?
+    body = if wants_no_ranges_and_supplies_etag && env["HTTP_IF_NONE_MATCH"] == etag
+      NotModifiedBody.new
+    elsif resource_size.zero?
       EmptyBody.new
     elsif http_ranges_from_header && (wants_ranges_and_no_etag || wants_ranges_and_etag_valid)
       if http_ranges_from_header.none?
