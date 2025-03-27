@@ -8,9 +8,9 @@ Gem::Specification.new do |spec|
   spec.authors = ["Julik Tarkhanov", "Sebastian van Hesteren"]
   spec.email = ["me@julik.nl"]
   spec.license = "MIT"
-  spec.summary = "A thin toolkit for working with block cipher encryption."
-  spec.description = "A thin toolkit for working with block cipher encryption."
-  spec.homepage = "https://github.com/julik/block_cipher_kit"
+  spec.summary = "Serve byte range HTTP responses lazily"
+  spec.description = "Serve byte range HTTP responses lazily"
+  spec.homepage = "https://github.com/julik/serve_byte_range"
 
   spec.required_ruby_version = ">= 2.7.0"
 
@@ -20,7 +20,7 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "rack", "~> 1.0"
+  spec.add_dependency "rack", ">= 1.0"
 
   spec.add_development_dependency "minitest"
   spec.add_development_dependency "rake"
