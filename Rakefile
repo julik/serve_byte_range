@@ -16,7 +16,7 @@ task :format do
 end
 
 task :generate_typedefs do
-  `bundle exec sord rbi/block_cipher_kit.rbi`
+  `bundle exec sord rbi/serve_byte_range.rbi`
 end
 
 # When building the gem, generate typedefs beforehand,

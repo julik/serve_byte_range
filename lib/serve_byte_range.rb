@@ -245,7 +245,12 @@ module ServeByteRange
     indices.uniq.map { |i| coalesced_sorted_ranges.fetch(i) }
   end
 
-  # @yield [range, io] The HTTP range being requested and the IO to `write()` the bytes into
+  # @param env[Hash] the Rack env
+  # @param resource_size[Integer] the size of the complete resource in bytes
+  # @param etag[String] the current ETag of the resource, or nil if none
+  # @param resource_content_type[String] the MIME type string of the resource
+  # @param multipart_boundary[String] The string to use as multipart boundary. Default is an automatically generated pseudo-random string.
+  # @yield [range[Range], io[IO]] The HTTP range being requested and the IO(ish) object to `write()` the bytes into
   # @example
   #     status, headers, body = serve_ranges(env, resource_size: file.size) do |range, io|
   #       file.seek(range.begin)
