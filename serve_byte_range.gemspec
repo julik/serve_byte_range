@@ -10,7 +10,12 @@ Gem::Specification.new do |spec|
   spec.license = "MIT"
   spec.summary = "Serve byte range HTTP responses lazily"
   spec.description = "Serve byte range HTTP responses lazily"
+
   spec.homepage = "https://github.com/julik/serve_byte_range"
+  # The homepage link on rubygems.org only appears if you add homepage_uri. Just spec.homepage is not enough.
+  spec.metadata["homepage_uri"] = spec.homepage
+  spec.metadata["source_code_uri"] = spec.homepage
+  # spec.metadata["changelog_uri"] = "#{spec.homepage}/blob/main/CHANGELOG.md"
 
   spec.required_ruby_version = ">= 2.7.0"
 
