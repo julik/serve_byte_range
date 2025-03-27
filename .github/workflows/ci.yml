@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  - push
+
+env:
+  BUNDLE_PATH: vendor/bundle
+
+jobs:
+  test_and_lint_minimum_ruby:
+    name: Tests/Lint (2.7)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 2.7
+          bundler-cache: true
+      - name: "Tests"
+        run: bundle exec rake test --backtrace
+      - name: "Lint"
+        run: bundle exec rake standard
+  test_recent_ruby:
+    name: Tests (3.4)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.4
+          bundler-cache: true
+      - name: "Tests"
+        run: bundle exec rake test --backtrace
