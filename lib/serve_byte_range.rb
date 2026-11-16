@@ -324,13 +324,14 @@ module ServeByteRange
     # using a 200 (OK) response.
     wants_ranges_and_etag_valid = env["HTTP_IF_RANGE"] && strong_etag_match?(env["HTTP_IF_RANGE"], etag) && env["HTTP_RANGE"]
     wants_ranges_and_no_etag = !env["HTTP_IF_RANGE"] && env["HTTP_RANGE"]
-    wants_no_ranges_and_supplies_etag = env["HTTP_IF_NONE_MATCH"] && !env["HTTP_RANGE"] && !env["HTTP_IF_RANGE"]
 
     # Very old Rack versions do not have get_byte_ranges and have just byte_ranges
     http_ranges_from_header = Rack::Utils.respond_to?(:get_byte_ranges) ? Rack::Utils.get_byte_ranges(env["HTTP_RANGE"], resource_size) : Rack::Utils.byte_ranges(env, resource_size)
     http_ranges_from_header = coalesce_ranges(http_ranges_from_header) if http_ranges_from_header
 
-    body = if wants_no_ranges_and_supplies_etag && weak_etag_match?(env["HTTP_IF_NONE_MATCH"], etag)
+    # If-None-Match gets evaluated before Range, and a match means there is nothing to send
+    # at all - see https://www.rfc-editor.org/rfc/rfc9110#section-13.2.2
+    body = if env["HTTP_IF_NONE_MATCH"] && weak_etag_match?(env["HTTP_IF_NONE_MATCH"], etag)
       NotModifiedBody.new
     elsif resource_size.zero?
       EmptyBody.new
