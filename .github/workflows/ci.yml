@@ -7,8 +7,28 @@ env:
   BUNDLE_PATH: vendor/bundle
 
 jobs:
-  test_and_lint_minimum_ruby:
-    name: Tests/Lint (2.7)
+  test:
+    name: Tests (Ruby ${{ matrix.ruby }}, Rack ${{ matrix.rack }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["2.7", "3.4"]
+        rack: ["2", "3"]
+    env:
+      BUNDLE_GEMFILE: ${{ github.workspace }}/gemfiles/rack_${{ matrix.rack }}.gemfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: "Tests"
+        run: bundle exec rake test --backtrace
+  lint:
+    name: Lint (2.7)
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -18,20 +38,5 @@ jobs:
         with:
           ruby-version: 2.7
           bundler-cache: true
-      - name: "Tests"
-        run: bundle exec rake test --backtrace
       - name: "Lint"
         run: bundle exec rake standard
-  test_recent_ruby:
-    name: Tests (3.4)
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: 3.4
-          bundler-cache: true
-      - name: "Tests"
-        run: bundle exec rake test --backtrace
