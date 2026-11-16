@@ -91,17 +91,23 @@ module ServeByteRange
     # Yields every segment the range touches, along with the inclusive range of bytes within that segment.
     # Nested Sequences are descended into, so only the leaf segments get yielded.
     #
-    # @param range[Range] an inclusive range of bytes within the Sequence
-    # @yield [segment[Object], range_in_segment[Range]]
+    # @param range[Range] a range of bytes within the Sequence, with both ends given. Exclusive ranges are fine
+    # @yield [segment[Object], range_in_segment[Range]] the yielded ranges are always inclusive
     # @return [void]
     def each_in_range(range, &blk)
       return enum_for(:each_in_range, range) unless blk
-      i = @intervals.bsearch_index { |iv| iv.offset + iv.size > range.begin }
+      raise ArgumentError, "The range must have both a beginning and an end, but was #{range.inspect}" if range.begin.nil? || range.end.nil?
+      first = range.begin
+      last = range.exclude_end? ? range.end - 1 : range.end
+      raise ArgumentError, "The range must not be reversed, but was #{range.inspect}" if last < first - 1 # 3...3 is just empty
+      return if last < first
+
+      i = @intervals.bsearch_index { |iv| iv.offset + iv.size > first }
       return unless i
 
-      while (iv = @intervals[i]) && iv.offset <= range.end
-        from = [range.begin, iv.offset].max - iv.offset
-        to = [range.end, iv.offset + iv.size - 1].min - iv.offset
+      while (iv = @intervals[i]) && iv.offset <= last
+        from = [first, iv.offset].max - iv.offset
+        to = [last, iv.offset + iv.size - 1].min - iv.offset
         if iv.segment.is_a?(Sequence)
           iv.segment.each_in_range(from..to, &blk)
         else

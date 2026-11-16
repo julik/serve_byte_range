@@ -321,7 +321,7 @@ module ServeByteRange
     # Yields every segment the range touches, along with the inclusive range of bytes within that segment.
     # Nested Sequences are descended into, so only the leaf segments get yielded.
     # 
-    # _@param_ `range` — an inclusive range of bytes within the Sequence
+    # _@param_ `range` — a range of bytes within the Sequence, with both ends given. Exclusive ranges are fine
     sig { params(range: T::Range[T.untyped], blk: T.untyped).void }
     def each_in_range(range, &blk); end
 

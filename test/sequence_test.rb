@@ -176,4 +176,14 @@ class SequenceTest < Minitest::Test
     end
     assert_equal 10, seq.size
   end
+
+  def test_each_in_range_with_exclusive_empty_and_open_ranges
+    seq = ServeByteRange::Sequence.new("abc", "def")
+    assert_equal [["abc", 0..2]], seq.each_in_range(0...3).to_a
+    assert_equal [["abc", 2..2], ["def", 0..0]], seq.each_in_range(2...4).to_a
+    assert_equal [], seq.each_in_range(3...3).to_a
+    assert_raises(ArgumentError) { seq.each_in_range(5..3).to_a }
+    assert_raises(ArgumentError) { seq.each_in_range(Range.new(1, nil)).to_a }
+    assert_raises(ArgumentError) { seq.each_in_range(Range.new(nil, 1)).to_a }
+  end
 end
