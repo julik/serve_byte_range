@@ -253,4 +253,31 @@ class ServeByteRangeTest < Minitest::Test
     status, _, _ = ServeByteRange.serve_ranges(env, resource_size: 10, etag: 'W/"abc"') { |range, io| io.write("x" * range.size) }
     assert_equal 200, status # If-Range requires a strong match
   end
+
+  def test_serves_not_modified_on_weakly_matching_if_none_match
+    ['"abc"', 'W/"abc"', '"x", "abc"', '"x",W/"abc"', "*", '"a,b", "abc"'].each do |if_none_match|
+      status, headers, _ = ServeByteRange.serve_ranges({"HTTP_IF_NONE_MATCH" => if_none_match}, resource_size: 10, etag: "abc") { |range, io| io.write("x" * range.size) }
+      assert_equal 304, status, "Expected 304 for If-None-Match: #{if_none_match}"
+      assert_equal '"abc"', headers["ETag"]
+    end
+
+    status, _, _ = ServeByteRange.serve_ranges({"HTTP_IF_NONE_MATCH" => '"abc"'}, resource_size: 10, etag: 'W/"abc"') { |range, io| io.write("x" * range.size) }
+    assert_equal 304, status # weak comparison ignores W/ on our side too
+  end
+
+  def test_serves_whole_body_on_mismatching_if_none_match
+    ['"abcd"', 'W/"ab"', '"x", "y"', '"a,b"', "abc", ""].each do |if_none_match|
+      status, _, _ = ServeByteRange.serve_ranges({"HTTP_IF_NONE_MATCH" => if_none_match}, resource_size: 10, etag: "abc") { |range, io| io.write("x" * range.size) }
+      assert_equal 200, status, "Expected 200 for If-None-Match: #{if_none_match}"
+    end
+
+    status, _, _ = ServeByteRange.serve_ranges({"HTTP_IF_NONE_MATCH" => '"abc"'}, resource_size: 10) { |range, io| io.write("x" * range.size) }
+    assert_equal 200, status
+  end
+
+  def test_serves_not_modified_on_if_none_match_star_without_etag
+    status, headers, _ = ServeByteRange.serve_ranges({"HTTP_IF_NONE_MATCH" => "*"}, resource_size: 10) { |range, io| io.write("x" * range.size) }
+    assert_equal 304, status
+    refute headers.key?("ETag")
+  end
 end

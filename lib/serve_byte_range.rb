@@ -266,6 +266,20 @@ module ServeByteRange
     header_value.strip == etag
   end
 
+  # If-None-Match is `*` or a list of entity tags, compared with the weak comparison.
+  # See https://www.rfc-editor.org/rfc/rfc9110#section-13.1.2
+  #
+  # @param header_value[String] the value of the If-None-Match header
+  # @param etag[String,nil] the quoted current ETag
+  # @return [Boolean]
+  def self.weak_etag_match?(header_value, etag)
+    return true if header_value.strip == "*" # we always have a representation
+    return false if etag.nil?
+    opaque_tag = etag.delete_prefix("W/")
+    # Scan instead of splitting on commas, since a comma is allowed inside an entity tag
+    header_value.scan(/(?:W\/)?"[^"]*"/).any? { |tag| tag.delete_prefix("W/") == opaque_tag }
+  end
+
   # @param env[Hash] the Rack env
   # @param resource_size[Integer] the size of the complete resource in bytes
   # @param etag[String] the current ETag of the resource, or nil if none
@@ -295,7 +309,7 @@ module ServeByteRange
     http_ranges_from_header = Rack::Utils.respond_to?(:get_byte_ranges) ? Rack::Utils.get_byte_ranges(env["HTTP_RANGE"], resource_size) : Rack::Utils.byte_ranges(env, resource_size)
     http_ranges_from_header = coalesce_ranges(http_ranges_from_header) if http_ranges_from_header
 
-    body = if wants_no_ranges_and_supplies_etag && env["HTTP_IF_NONE_MATCH"] == etag
+    body = if wants_no_ranges_and_supplies_etag && weak_etag_match?(env["HTTP_IF_NONE_MATCH"], etag)
       NotModifiedBody.new
     elsif resource_size.zero?
       EmptyBody.new

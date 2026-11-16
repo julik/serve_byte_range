@@ -43,6 +43,15 @@ module ServeByteRange
   sig { params(header_value: String, etag: T.nilable(String)).returns(T::Boolean) }
   def self.strong_etag_match?(header_value, etag); end
 
+  # If-None-Match is `*` or a list of entity tags, compared with the weak comparison.
+  # See https://www.rfc-editor.org/rfc/rfc9110#section-13.1.2
+  # 
+  # _@param_ `header_value` — the value of the If-None-Match header
+  # 
+  # _@param_ `etag` — the quoted current ETag
+  sig { params(header_value: String, etag: T.nilable(String)).returns(T::Boolean) }
+  def self.weak_etag_match?(header_value, etag); end
+
   # _@param_ `env` — the Rack env
   # 
   # _@param_ `resource_size` — the size of the complete resource in bytes
