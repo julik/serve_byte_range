@@ -6,9 +6,12 @@ Bundler.setup
 require_relative "../lib/serve_byte_range"
 require "minitest"
 require "minitest/autorun"
+require_relative "support/bytes_assertions"
 require "tempfile"
 
 class ServeByteRangeTest < Minitest::Test
+  include BytesAssertions
+
   def test_serves_whole_body
     rng = Random.new(Minitest.seed)
     bytes = rng.bytes(474)
@@ -24,7 +27,7 @@ class ServeByteRangeTest < Minitest::Test
 
     output = StringIO.new.binmode
     body.each { |chunk| output.write(chunk) }
-    assert_equal bytes, output.string
+    assert_same_bytes bytes, output.string
   end
 
   def test_serves_single_range
@@ -42,7 +45,7 @@ class ServeByteRangeTest < Minitest::Test
 
     output = StringIO.new.binmode
     body.each { |chunk| output.write(chunk) }
-    assert_equal bytes[1..2], output.string
+    assert_same_bytes bytes[1..2], output.string
 
     env = {"HTTP_RANGE" => "bytes=319-"}
     status, headers, body = ServeByteRange.serve_ranges(env, resource_size: bytes.bytesize, etag: "AbCehZ", resource_content_type: "x-foo/ba", &serve_proc)
@@ -52,7 +55,7 @@ class ServeByteRangeTest < Minitest::Test
 
     output = StringIO.new.binmode
     body.each { |chunk| output.write(chunk) }
-    assert_equal bytes[319..], output.string
+    assert_same_bytes bytes[319..], output.string
 
     env = {"HTTP_RANGE" => "bytes=0-0"}
     status, headers, body = ServeByteRange.serve_ranges(env, resource_size: bytes.bytesize, etag: "AbCehZ", resource_content_type: "x-foo/ba", &serve_proc)
@@ -62,7 +65,7 @@ class ServeByteRangeTest < Minitest::Test
 
     output = StringIO.new.binmode
     body.each { |chunk| output.write(chunk) }
-    assert_equal bytes[0..0], output.string
+    assert_same_bytes bytes[0..0], output.string
   end
 
   def test_serves_single_range_of_same_range_supplied_multiple_times_just_once
@@ -80,7 +83,7 @@ class ServeByteRangeTest < Minitest::Test
 
     output = StringIO.new.binmode
     body.each { |chunk| output.write(chunk) }
-    assert_equal bytes[1..2], output.string
+    assert_same_bytes bytes[1..2], output.string
   end
 
   def test_unions_overlapping_ranges
@@ -98,7 +101,7 @@ class ServeByteRangeTest < Minitest::Test
 
     output = StringIO.new.binmode
     body.each { |chunk| output.write(chunk) }
-    assert_equal bytes[1..9], output.string
+    assert_same_bytes bytes[1..9], output.string
   end
 
   def test_serves_multiple_ranges
@@ -242,7 +245,7 @@ class ServeByteRangeTest < Minitest::Test
     assert_equal "bytes 0-9/474", headers["Content-Range"]
     output = StringIO.new.binmode
     body.each { |chunk| output.write(chunk) }
-    assert_equal bytes[0..9], output.string
+    assert_same_bytes bytes[0..9], output.string
   end
 
   def test_honors_if_none_match_with_the_etag_it_sent_when_given_unquoted_etag
@@ -309,7 +312,7 @@ class ServeByteRangeTest < Minitest::Test
     _, _, body = ServeByteRange.serve_ranges({}, resource_size: bytes.bytesize) { |range, io| IO.copy_stream(source, io, range.size, range.begin) }
     retained = []
     body.each { |chunk| retained << chunk } # what Rack::ETag does
-    assert_equal bytes, retained.join
+    assert_same_bytes bytes, retained.join
   end
 
   def test_serves_not_modified_on_matching_if_none_match_even_with_a_range
