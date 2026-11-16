@@ -65,7 +65,7 @@ end
 
 The body is generated lazily while the webserver sends the response, so the `File` has to stay open until then. Closing it right after `serve_sequence` returns would break the response, and not closing it at all leaks a file descriptor per request - hence the `Rack::BodyProxy`.
 
-The `ETag` of the response is derived from the ETags of the segments. If you do not give an `etag:` for a segment, its size is used instead, and a change which keeps the size the same will not change the `ETag` of the `Sequence`. A `Sequence` can also be added to another `Sequence`. If a segment writes more or fewer bytes than its range requires, you get an exception saying which segment it was.
+The `ETag` of the response is derived from the ETags of the segments. If you do not give an `etag:` for a segment, its size is used instead, and a change which keeps the size the same will not change the `ETag` of the `Sequence`. Sequences can be nested. If a segment writes more or fewer bytes than its range requires, you get an exception saying which segment it was.
 
 ## Development
 
