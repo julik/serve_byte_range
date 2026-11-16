@@ -90,7 +90,7 @@ module ServeByteRange
   # 
   # _@param_ `sequence` — the Sequence to serve
   # 
-  # _@param_ `etag` — the ETag of the resource, defaults to the ETag of the Sequence
+  # _@param_ `etag` — the ETag of the resource, defaults to the ETag of the Sequence. Pass nil to not send one
   # 
   # _@param_ `options` — other options for {serve_ranges}
   # 
@@ -99,7 +99,7 @@ module ServeByteRange
     params(
       env: T::Hash[T.untyped, T.untyped],
       sequence: Sequence,
-      etag: String,
+      etag: T.nilable(String),
       options: T::Hash[T.untyped, T.untyped],
       segment_serving_block: T.untyped
     ).returns(T::Array[T.untyped])

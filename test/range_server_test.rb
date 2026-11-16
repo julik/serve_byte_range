@@ -218,6 +218,9 @@ class ServeByteRangeTest < Minitest::Test
     assert_equal '"abc"', ServeByteRange.quote_etag("abc")
     assert_equal '"abc"', ServeByteRange.quote_etag('"abc"')
     assert_equal 'W/"abc"', ServeByteRange.quote_etag('W/"abc"')
+    assert_equal '"abc"', ServeByteRange.quote_etag('"abc')
+    assert_equal '"abc"', ServeByteRange.quote_etag('abc"')
+    assert_equal '"abc"', ServeByteRange.quote_etag('"a"bc"')
   end
 
   def test_serves_weak_etag_as_is
