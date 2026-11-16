@@ -34,19 +34,31 @@ You can also retrieve the `range_in_file` from an external resource, you can als
 If your response is glued together from several pieces - byte ranges of objects in S3, literal strings and so on - use a `ServeByteRange::Sequence`. A segment can be any object, since you give its size explicitly. For every requested range you get the segments it touches, along with the range of bytes inside each segment:
 
 ```ruby
+header_file = File.open("header.bin", "rb")
+
 seq = ServeByteRange::Sequence.new
+seq.add_segment(header_file, size: header_file.size, etag: "#{header_file.mtime.to_i}-#{header_file.size}")
 seq.add_segment(s3_object, size: s3_object.content_length, etag: s3_object.etag)
 seq << "--- redacted ---\n" # Strings are sized in bytes, and their contents go into the ETag
 seq.add_segment(other_s3_object, size: other_s3_object.content_length, etag: other_s3_object.etag)
 
 ServeByteRange.serve_sequence(env, seq) do |segment, range_in_segment, io|
-  if segment.is_a?(String)
+  case segment
+  when String
     io.write(segment.byteslice(range_in_segment))
-  else
-    io.write(segment.get(range: "bytes=%d-%d" % [range_in_segment.begin, range_in_segment.end]).body.read)
+  when File
+    # Copies range_in_segment.size bytes starting at range_in_segment.begin, without moving the file position
+    IO.copy_stream(segment, io, range_in_segment.size, range_in_segment.begin)
+  when Aws::S3::Object
+    # Passing a block to `get` streams the body in chunks instead of buffering it in memory
+    segment.get(range: "bytes=%d-%d" % [range_in_segment.begin, range_in_segment.end]) do |chunk|
+      io.write(chunk)
+    end
   end
 end
 ```
+
+The body is generated lazily while the webserver sends the response, so the `File` has to stay open until then - close it from `rack.after_reply`, a body proxy or similar, not right after `serve_sequence` returns.
 
 The `ETag` of the response is derived from the ETags of the segments. If you do not give an `etag:` for a segment, its size is used instead, and a change which keeps the size the same will not change the `ETag` of the `Sequence`. A `Sequence` can also be added to another `Sequence`. If a segment writes more or fewer bytes than its range requires, you get an exception saying which segment it was.
 
