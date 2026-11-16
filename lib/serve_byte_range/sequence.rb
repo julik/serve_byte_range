@@ -28,7 +28,8 @@ module ServeByteRange
       segments.each { |segment| self << segment }
     end
 
-    # Adds a segment of a given size. Segments of zero size are skipped.
+    # Adds a segment of a given size. Segments of zero size are skipped. The size and ETag are taken
+    # as they are now, so a String gets copied and frozen, and a Sequence gets frozen when added.
     #
     # @param segment[Object] any object, it gets yielded back when serving
     # @param size[Integer] the size of the segment in bytes
@@ -39,6 +40,8 @@ module ServeByteRange
     def add_segment(segment, size:, etag: nil)
       raise ArgumentError, "Segment size must be an Integer >= 0, but was #{size.inspect}" unless size.is_a?(Integer) && size >= 0
       return self if size.zero?
+      segment = segment.dup.freeze if segment.is_a?(String) && !segment.frozen?
+      segment.freeze if segment.is_a?(Sequence)
       @intervals << Interval.new(segment, size, @size, etag.to_s, etag.nil?)
       @size += size
       @etag = nil
@@ -81,6 +84,15 @@ module ServeByteRange
         digest = '"%s"' % Digest::SHA1.hexdigest(@intervals.map { |iv| "#{iv.size}:#{iv.etag}" }.join("\0"))
         strong_etag? ? digest : "W/#{digest}"
       end
+    end
+
+    # Freezes the Sequence, so that no more segments can be added
+    #
+    # @return [self]
+    def freeze
+      etag # memoize while we still can
+      @intervals.freeze
+      super
     end
 
     # @return [Boolean] whether every segment has an ETag of its own
