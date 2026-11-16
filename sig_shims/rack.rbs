@@ -1,0 +1,9 @@
+# Just the parts of Rack we use - Rack does not ship signatures of its own
+module Rack
+  module Utils
+    def self.get_byte_ranges: (String? http_range, Integer size, ?max_ranges: Integer) -> Array[Range[Integer]]?
+
+    # Rack 1.x only has this one
+    def self.byte_ranges: (Hash[String, untyped] env, Integer size) -> Array[Range[Integer]]?
+  end
+end

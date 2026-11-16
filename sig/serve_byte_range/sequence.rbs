@@ -1,0 +1,91 @@
+# Generated from lib/serve_byte_range/sequence.rb with RBS::Inline
+
+module ServeByteRange
+  # A resource composed of several segments glued together - for example, byte ranges of objects
+  # in remote storage interleaved with literal strings. A segment can be any object, since its
+  # size is given explicitly. A Sequence can also be a segment of another Sequence.
+  #
+  #     seq = ServeByteRange::Sequence.new
+  #     seq.add_segment(s3_object, size: 1024, etag: s3_object.etag)
+  #     seq << "Literal text"
+  #     ServeByteRange.serve_sequence(env, seq) do |segment, range_in_segment, io|
+  #       io.write(segment.is_a?(String) ? segment.byteslice(range_in_segment) : fetch_range(segment, range_in_segment))
+  #     end
+  class Sequence
+    class Interval < Struct[untyped | Integer | String | bool]
+      attr_accessor segment(): untyped
+
+      attr_accessor size(): Integer
+
+      attr_accessor offset(): Integer
+
+      attr_accessor etag(): String
+
+      attr_accessor weak(): bool
+
+      def self.new: (?untyped segment, ?Integer size, ?Integer offset, ?String etag, ?bool weak) -> instance
+                  | (?segment: untyped, ?size: Integer, ?offset: Integer, ?etag: String, ?weak: bool) -> instance
+    end
+
+    @intervals: Array[Interval]
+
+    @etag: String?
+
+    # The total size of all segments in bytes
+    attr_reader size: Integer
+
+    # @rbs *segments: untyped -- segments to add with `<<`
+    def initialize: (*untyped segments) -> untyped
+
+    # Adds a segment of a given size. Segments of zero size are skipped. The size and ETag are taken
+    # as they are now, so a String gets copied and frozen, and a Sequence gets frozen when added.
+    #
+    # The `etag` goes into the ETag of the Sequence. Without it only the size is known, which won't catch
+    # content changes that keep the size the same - so the ETag of the Sequence becomes weak. It can be
+    # quoted (as S3 returns it) or not, and a weak one (`W/"..."`) makes the ETag of the Sequence weak too.
+    #
+    #     @rbs segment: untyped -- any object, it gets yielded back when serving
+    #     @rbs size: Integer -- the size of the segment in bytes
+    #     @rbs etag: untyped -- a validator for the segment
+    #     @rbs return: self
+    def add_segment: (untyped segment, size: Integer, ?etag: untyped) -> self
+
+    # Adds a String (sized in bytes and validated by its contents), a Sequence, an object responding
+    # to `bytesize`, or an IO-ish object (responding to `read` and `size`, like File, StringIO or Tempfile).
+    # Anything else needs an explicit size, so use #add_segment for it.
+    #
+    #     @rbs segment: untyped
+    #     @rbs return: self
+    def <<: (untyped segment) -> self
+
+    # A weak ETag stops If-Range from matching, so a client won't splice ranges taken from
+    # different versions of a segment whose content has changed but whose size has not
+    #
+    # Returns a quoted ETag derived from the ETags of all the segments, weak (`W/"..."`)
+    # if any segment was added without an `etag:`
+    #
+    #     @rbs return: String
+    def etag: () -> String
+
+    # Freezes the Sequence, so that no more segments can be added
+    #
+    #     @rbs return: self
+    def freeze: () -> self
+
+    # Tells whether every segment has an ETag of its own
+    #
+    #     @rbs return: bool
+    def strong_etag?: () -> bool
+
+    # Yields every segment the range touches, along with the inclusive range of bytes within that segment.
+    # Nested Sequences are descended into, so only the leaf segments get yielded.
+    #
+    # The range must have both ends given, exclusive ranges are fine. The yielded ranges are always inclusive.
+    # Returns an Enumerator when called without a block.
+    #
+    #     @rbs (Range[Integer] range) { (untyped segment, Range[Integer] range_in_segment) -> void } -> void
+    #         | (Range[Integer] range) -> Enumerator[[untyped, Range[Integer]], void]
+    def each_in_range: (Range[Integer] range) { (untyped segment, Range[Integer] range_in_segment) -> void } -> void
+                     | (Range[Integer] range) -> Enumerator[[ untyped, Range[Integer] ], void]
+  end
+end

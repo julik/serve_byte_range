@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+# rbs_inline: enabled
+
 require "digest"
 
 module ServeByteRange
@@ -7,7 +9,6 @@ module ServeByteRange
   # in remote storage interleaved with literal strings. A segment can be any object, since its
   # size is given explicitly. A Sequence can also be a segment of another Sequence.
   #
-  # @example
   #     seq = ServeByteRange::Sequence.new
   #     seq.add_segment(s3_object, size: 1024, etag: s3_object.etag)
   #     seq << "Literal text"
@@ -15,13 +16,22 @@ module ServeByteRange
   #       io.write(segment.is_a?(String) ? segment.byteslice(range_in_segment) : fetch_range(segment, range_in_segment))
   #     end
   class Sequence
-    Interval = Struct.new(:segment, :size, :offset, :etag, :weak)
+    Interval = Struct.new(
+      :segment, #: untyped
+      :size, #: Integer
+      :offset, #: Integer
+      :etag, #: String
+      :weak #: bool
+    )
     private_constant :Interval
 
-    # @return [Integer] the total size of all segments in bytes
-    attr_reader :size
+    # @rbs @intervals: Array[Interval]
+    # @rbs @etag: String?
 
-    # @param segments[Array] segments to add with `<<`
+    # The total size of all segments in bytes
+    attr_reader :size #: Integer
+
+    #     @rbs *segments: untyped -- segments to add with `<<`
     def initialize(*segments)
       @intervals = []
       @size = 0
@@ -31,13 +41,14 @@ module ServeByteRange
     # Adds a segment of a given size. Segments of zero size are skipped. The size and ETag are taken
     # as they are now, so a String gets copied and frozen, and a Sequence gets frozen when added.
     #
-    # @param segment[Object] any object, it gets yielded back when serving
-    # @param size[Integer] the size of the segment in bytes
-    # @param etag[String,Integer,nil] a validator for the segment, which goes into the ETag of the Sequence.
-    #   Without it only the size is known, which won't catch content changes that keep the size the same -
-    #   so the ETag of the Sequence becomes weak. Can be quoted (as S3 returns it) or not, and
-    #   a weak one (`W/"..."`) makes the ETag of the Sequence weak too.
-    # @return [self]
+    # The `etag` goes into the ETag of the Sequence. Without it only the size is known, which won't catch
+    # content changes that keep the size the same - so the ETag of the Sequence becomes weak. It can be
+    # quoted (as S3 returns it) or not, and a weak one (`W/"..."`) makes the ETag of the Sequence weak too.
+    #
+    #     @rbs segment: untyped -- any object, it gets yielded back when serving
+    #     @rbs size: Integer -- the size of the segment in bytes
+    #     @rbs etag: untyped -- a validator for the segment
+    #     @rbs return: self
     def add_segment(segment, size:, etag: nil)
       raise ArgumentError, "Segment size must be an Integer >= 0, but was #{size.inspect}" unless size.is_a?(Integer) && size >= 0
       return self if size.zero?
@@ -53,10 +64,10 @@ module ServeByteRange
 
     # Adds a String (sized in bytes and validated by its contents), a Sequence, an object responding
     # to `bytesize`, or an IO-ish object (responding to `read` and `size`, like File, StringIO or Tempfile).
-    # Anything else needs an explicit size, so use {#add_segment} for it.
+    # Anything else needs an explicit size, so use #add_segment for it.
     #
-    # @param segment[String,Sequence,Object]
-    # @return [self]
+    #     @rbs segment: untyped
+    #     @rbs return: self
     def <<(segment)
       case segment
       when String
@@ -79,8 +90,10 @@ module ServeByteRange
     # A weak ETag stops If-Range from matching, so a client won't splice ranges taken from
     # different versions of a segment whose content has changed but whose size has not
     #
-    # @return [String] a quoted ETag derived from the ETags of all the segments, weak (`W/"..."`)
-    #   if any segment was added without an `etag:`
+    # Returns a quoted ETag derived from the ETags of all the segments, weak (`W/"..."`)
+    # if any segment was added without an `etag:`
+    #
+    #     @rbs return: String
     def etag
       @etag ||= begin
         # The size goes in too, since the same validator with a different size is a different representation
@@ -91,14 +104,16 @@ module ServeByteRange
 
     # Freezes the Sequence, so that no more segments can be added
     #
-    # @return [self]
+    #     @rbs return: self
     def freeze
       etag # memoize while we still can
       @intervals.freeze
       super
     end
 
-    # @return [Boolean] whether every segment has an ETag of its own
+    # Tells whether every segment has an ETag of its own
+    #
+    #     @rbs return: bool
     def strong_etag?
       @intervals.none?(&:weak)
     end
@@ -106,9 +121,11 @@ module ServeByteRange
     # Yields every segment the range touches, along with the inclusive range of bytes within that segment.
     # Nested Sequences are descended into, so only the leaf segments get yielded.
     #
-    # @param range[Range] a range of bytes within the Sequence, with both ends given. Exclusive ranges are fine
-    # @yield [segment[Object], range_in_segment[Range]] the yielded ranges are always inclusive
-    # @return [void]
+    # The range must have both ends given, exclusive ranges are fine. The yielded ranges are always inclusive.
+    # Returns an Enumerator when called without a block.
+    #
+    #     @rbs (Range[Integer] range) { (untyped segment, Range[Integer] range_in_segment) -> void } -> void
+    #         | (Range[Integer] range) -> Enumerator[[untyped, Range[Integer]], void]
     def each_in_range(range, &blk)
       return enum_for(:each_in_range, range) unless blk
       raise ArgumentError, "The range must have both a beginning and an end, but was #{range.inspect}" if range.begin.nil? || range.end.nil?

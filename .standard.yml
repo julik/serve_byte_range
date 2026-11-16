@@ -1,1 +1,5 @@
 ruby_version: 2.7
+ignore:
+  # `#: Type` is rbs-inline/Steep annotation syntax, which the RuboCop pinned by our Standard predates
+  - "lib/**/*.rb":
+      - Layout/LeadingCommentSpace

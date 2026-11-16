@@ -1,0 +1,5 @@
+# Generated from lib/serve_byte_range/version.rb with RBS::Inline
+
+module ServeByteRange
+  VERSION: ::String
+end
