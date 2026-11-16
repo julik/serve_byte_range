@@ -44,7 +44,7 @@ seq.add_segment(s3_object, size: s3_object.content_length, etag: s3_object.etag)
 seq << "--- redacted ---\n" # Strings are sized in bytes, and their contents go into the ETag
 seq.add_segment(other_s3_object, size: other_s3_object.content_length, etag: other_s3_object.etag)
 
-ServeByteRange.serve_sequence(env, seq) do |segment, range_in_segment, io|
+status, headers, body = ServeByteRange.serve_sequence(env, seq) do |segment, range_in_segment, io|
   case segment
   when String
     io.write(segment.byteslice(range_in_segment))
@@ -58,9 +58,12 @@ ServeByteRange.serve_sequence(env, seq) do |segment, range_in_segment, io|
     end
   end
 end
+
+# The webserver calls `close` on the body once the response is sent, or if the client goes away
+[status, headers, Rack::BodyProxy.new(body) { header_file.close }]
 ```
 
-The body is generated lazily while the webserver sends the response, so the `File` has to stay open until then - close it from `rack.after_reply`, a body proxy or similar, not right after `serve_sequence` returns.
+The body is generated lazily while the webserver sends the response, so the `File` has to stay open until then. Closing it right after `serve_sequence` returns would break the response, and not closing it at all leaks a file descriptor per request - hence the `Rack::BodyProxy`.
 
 The `ETag` of the response is derived from the ETags of the segments. If you do not give an `etag:` for a segment, its size is used instead, and a change which keeps the size the same will not change the `ETag` of the `Sequence`. A `Sequence` can also be added to another `Sequence`. If a segment writes more or fewer bytes than its range requires, you get an exception saying which segment it was.
 
