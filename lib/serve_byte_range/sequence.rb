@@ -15,7 +15,7 @@ module ServeByteRange
   #       io.write(segment.is_a?(String) ? segment.byteslice(range_in_segment) : fetch_range(segment, range_in_segment))
   #     end
   class Sequence
-    Interval = Struct.new(:segment, :size, :offset, :etag)
+    Interval = Struct.new(:segment, :size, :offset, :etag, :weak)
     private_constant :Interval
 
     # @return [Integer] the total size of all segments in bytes
@@ -32,13 +32,14 @@ module ServeByteRange
     #
     # @param segment[Object] any object, it gets yielded back when serving
     # @param size[Integer] the size of the segment in bytes
-    # @param etag[String,Integer] a validator for the segment, which goes into the ETag of the Sequence.
-    #   Defaults to the size, which won't catch content changes that keep the size the same.
+    # @param etag[String,Integer,nil] a validator for the segment, which goes into the ETag of the Sequence.
+    #   Without it only the size is known, which won't catch content changes that keep the size the same -
+    #   so the ETag of the Sequence becomes weak.
     # @return [self]
-    def add_segment(segment, size:, etag: size)
+    def add_segment(segment, size:, etag: nil)
       raise ArgumentError, "Segment size must be an Integer >= 0, but was #{size.inspect}" unless size.is_a?(Integer) && size >= 0
       return self if size.zero?
-      @intervals << Interval.new(segment, size, @size, etag.to_s)
+      @intervals << Interval.new(segment, size, @size, etag.to_s, etag.nil?)
       @size += size
       self
     end
@@ -53,16 +54,26 @@ module ServeByteRange
       when String
         add_segment(segment, size: segment.bytesize, etag: Digest::SHA1.hexdigest(segment))
       when Sequence
-        add_segment(segment, size: segment.size, etag: segment.etag)
+        add_segment(segment, size: segment.size, etag: segment.strong_etag? ? segment.etag : nil)
       else
         size = segment.respond_to?(:bytesize) ? segment.bytesize : segment.size
         add_segment(segment, size: size)
       end
     end
 
-    # @return [String] a quoted ETag derived from the ETags of all the segments
+    # A weak ETag stops If-Range from matching, so a client won't splice ranges taken from
+    # different versions of a segment whose content has changed but whose size has not
+    #
+    # @return [String] a quoted ETag derived from the ETags of all the segments, weak (`W/"..."`)
+    #   if any segment was added without an `etag:`
     def etag
-      '"%s"' % Digest::SHA1.hexdigest(@intervals.map(&:etag).join("\0"))
+      digest = '"%s"' % Digest::SHA1.hexdigest(@intervals.map(&:etag).join("\0"))
+      strong_etag? ? digest : "W/#{digest}"
+    end
+
+    # @return [Boolean] whether every segment has an ETag of its own
+    def strong_etag?
+      @intervals.none?(&:weak)
     end
 
     # Yields every segment the range touches, along with the inclusive range of bytes within that segment.

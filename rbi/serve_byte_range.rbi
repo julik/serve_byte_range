@@ -294,9 +294,9 @@ module ServeByteRange
     # 
     # _@param_ `size` — the size of the segment in bytes
     # 
-    # _@param_ `etag` — a validator for the segment, which goes into the ETag of the Sequence. Defaults to the size, which won't catch content changes that keep the size the same.
-    sig { params(segment: Object, size: Integer, etag: T.any(String, Integer)).returns(T.self_type) }
-    def add_segment(segment, size:, etag: size); end
+    # _@param_ `etag` — a validator for the segment, which goes into the ETag of the Sequence. Without it only the size is known, which won't catch content changes that keep the size the same - so the ETag of the Sequence becomes weak.
+    sig { params(segment: Object, size: Integer, etag: T.nilable(T.any(String, Integer))).returns(T.self_type) }
+    def add_segment(segment, size:, etag: nil); end
 
     # Adds a String (sized in bytes and validated by its contents), a Sequence, or an object
     # responding to `bytesize` or `size`
@@ -305,9 +305,17 @@ module ServeByteRange
     sig { params(segment: T.any(String, Sequence, Object)).returns(T.self_type) }
     def <<(segment); end
 
-    # _@return_ — a quoted ETag derived from the ETags of all the segments
+    # A weak ETag stops If-Range from matching, so a client won't splice ranges taken from
+    # different versions of a segment whose content has changed but whose size has not
+    # 
+    # _@return_ — a quoted ETag derived from the ETags of all the segments, weak (`W/"..."`)
+    # if any segment was added without an `etag:`
     sig { returns(String) }
     def etag; end
+
+    # _@return_ — whether every segment has an ETag of its own
+    sig { returns(T::Boolean) }
+    def strong_etag?; end
 
     # Yields every segment the range touches, along with the inclusive range of bytes within that segment.
     # Nested Sequences are descended into, so only the leaf segments get yielded.
@@ -336,6 +344,10 @@ module ServeByteRange
       # Returns the value of attribute etag
       sig { returns(Object) }
       attr_accessor :etag
+
+      # Returns the value of attribute weak
+      sig { returns(Object) }
+      attr_accessor :weak
     end
   end
 end

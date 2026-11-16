@@ -27,14 +27,14 @@ class SequenceTest < Minitest::Test
   def build_sequence_and_expected_bytes
     rng = Random.new(Minitest.seed)
     remote = RemoteObject.new(rng.bytes(200))
-    inner = ServeByteRange::Sequence.new("«inner — ✂»", RemoteObject.new(rng.bytes(7)))
+    inner = ServeByteRange::Sequence.new("«inner — ✂»").add_segment(RemoteObject.new(rng.bytes(7)), size: 7, etag: "inner-v1")
 
     seq = ServeByteRange::Sequence.new
     seq.add_segment(remote, size: remote.size, etag: "v1")
     seq << "«redacted — ✂»\n"
     seq << ""
     seq << inner
-    seq.add_segment(RemoteObject.new(rng.bytes(3)), size: 3)
+    seq.add_segment(RemoteObject.new(rng.bytes(3)), size: 3, etag: "tail-v1")
 
     expected = remote.bytes + "«redacted — ✂»\n".b + inner.each_in_range(0..(inner.size - 1)).map { |s, r| fetch(s, r) }.join.b
     seq.each_in_range((seq.size - 3)..(seq.size - 1)) { |s, r| expected << fetch(s, r) }
@@ -124,5 +124,30 @@ class SequenceTest < Minitest::Test
     _, _, body = ServeByteRange.serve_sequence({}, seq) { |segment, r, io| io.write(segment + "!") }
     error = assert_raises(RuntimeError) { body.each {} }
     assert_includes error.message, "the limit for this segment (String, bytes 0-2 of it) is 3"
+  end
+
+  def test_etag_is_weak_unless_every_segment_has_an_etag
+    assert ServeByteRange::Sequence.new("abc").strong_etag?
+    assert_match(/\A"[0-9a-f]{40}"\z/, ServeByteRange::Sequence.new("abc").etag)
+
+    seq = ServeByteRange::Sequence.new("abc").add_segment(:remote, size: 10, etag: "v1")
+    assert seq.strong_etag?
+
+    seq.add_segment(:other_remote, size: 10)
+    refute seq.strong_etag?
+    assert_match(/\AW\/"[0-9a-f]{40}"\z/, seq.etag)
+
+    refute ServeByteRange::Sequence.new("x", seq).strong_etag? # weakness carries over from nested sequences
+  end
+
+  def test_serves_range_regardless_of_if_range_when_etag_is_weak
+    seq = ServeByteRange::Sequence.new.add_segment("abcdef", size: 6)
+    env = {"HTTP_RANGE" => "bytes=0-1", "HTTP_IF_RANGE" => seq.etag}
+    status, headers, _ = ServeByteRange.serve_sequence(env, seq) { |segment, r, io| io.write(segment[r]) }
+    assert_equal 200, status # a weak validator can not be used for If-Range
+    assert_equal seq.etag, headers["ETag"]
+
+    status, _, _ = ServeByteRange.serve_sequence({"HTTP_IF_NONE_MATCH" => seq.etag}, seq) { |segment, r, io| io.write(segment[r]) }
+    assert_equal 304, status
   end
 end
