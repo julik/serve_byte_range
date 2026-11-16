@@ -164,4 +164,16 @@ class SequenceTest < Minitest::Test
     refute_equal etag_before, seq.etag
     assert_same seq.etag, seq.etag
   end
+
+  def test_append_only_takes_objects_it_can_size_in_bytes
+    seq = ServeByteRange::Sequence.new
+    seq << StringIO.new("abcdef")
+    seq << Struct.new(:bytesize).new(4)
+    assert_equal 10, seq.size
+
+    [["aaa", "bbb"], {k: "v"}, 42, :sym].each do |unsizeable|
+      assert_raises(ArgumentError) { seq << unsizeable }
+    end
+    assert_equal 10, seq.size
+  end
 end
