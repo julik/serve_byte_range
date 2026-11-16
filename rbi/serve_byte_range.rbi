@@ -1,5 +1,6 @@
 # typed: strong
 module ServeByteRange
+  MAX_RANGES = T.let(100, T.untyped)
   VERSION = T.let("1.0.0", T.untyped)
 
   # sord omit - no YARD return type given, using untyped
@@ -25,6 +26,25 @@ module ServeByteRange
   # _@return_ — ranges squashed together honoring their overlaps
   sig { params(ranges: T::Array[T::Range[T.untyped]]).returns(T::Array[T.untyped]) }
   def self.coalesce_ranges(ranges); end
+
+  # Parses and coalesces the ranges from the Range header. Returns nil if the header should be
+  # ignored (absent, malformed or too many ranges) and an empty array if nothing is satisfiable.
+  # 
+  # Rack returns no ranges when their sizes add up to more than the resource, which rejects
+  # valid overlaps like `bytes=0-99,50-149` on 150 bytes. So we feed Rack one spec at a time
+  # and only check the total after coalescing.
+  # 
+  # _@param_ `http_range_header` — the value of the Range header
+  # 
+  # _@param_ `resource_size` — the size of the complete resource in bytes
+  sig { params(http_range_header: T.nilable(String), resource_size: Integer).returns(T.nilable(T::Array[T::Range[T.untyped]])) }
+  def self.parse_ranges(http_range_header, resource_size); end
+
+  # sord omit - no YARD type given for "range_spec", using untyped
+  # sord omit - no YARD type given for "resource_size", using untyped
+  # sord omit - no YARD return type given, using untyped
+  sig { params(range_spec: T.untyped, resource_size: T.untyped).returns(T.untyped) }
+  def self.parse_single_range_spec(range_spec, resource_size); end
 
   # Quotes the ETag unless it already is a quoted strong or weak (`W/"..."`) entity tag
   # 

@@ -245,6 +245,46 @@ module ServeByteRange
     indices.uniq.map { |i| coalesced_sorted_ranges.fetch(i) }
   end
 
+  # Maximum number of range specs in a Range header, before coalescing. Same as Rack's default
+  MAX_RANGES = 100
+
+  # Parses and coalesces the ranges from the Range header. Returns nil if the header should be
+  # ignored (absent, malformed or too many ranges) and an empty array if nothing is satisfiable.
+  #
+  # Rack returns no ranges when their sizes add up to more than the resource, which rejects
+  # valid overlaps like `bytes=0-99,50-149` on 150 bytes. So we feed Rack one spec at a time
+  # and only check the total after coalescing.
+  #
+  # @param http_range_header[String,nil] the value of the Range header
+  # @param resource_size[Integer] the size of the complete resource in bytes
+  # @return [Array<Range>,nil]
+  def self.parse_ranges(http_range_header, resource_size)
+    return unless http_range_header && http_range_header =~ /bytes=([^;]+)/
+    range_specs = $1.split(/,[ \t]*/)
+    return if range_specs.empty? || range_specs.length > MAX_RANGES
+
+    ranges = []
+    range_specs.each do |range_spec|
+      ranges_for_spec = parse_single_range_spec(range_spec, resource_size)
+      return nil if ranges_for_spec.nil? # a malformed spec invalidates the whole header, as in Rack
+      ranges.concat(ranges_for_spec)
+    end
+
+    ranges = coalesce_ranges(ranges)
+    return [] if ranges.sum(&:size) > resource_size
+    ranges
+  end
+
+  def self.parse_single_range_spec(range_spec, resource_size)
+    # Very old Rack versions do not have get_byte_ranges and have just byte_ranges
+    if Rack::Utils.respond_to?(:get_byte_ranges)
+      Rack::Utils.get_byte_ranges("bytes=#{range_spec}", resource_size)
+    else
+      Rack::Utils.byte_ranges({"HTTP_RANGE" => "bytes=#{range_spec}"}, resource_size)
+    end
+  end
+  private_class_method :parse_single_range_spec
+
   # Quotes the ETag unless it already is a quoted strong or weak (`W/"..."`) entity tag
   #
   # @param etag[String,nil] the ETag, quoted or not
@@ -291,9 +331,7 @@ module ServeByteRange
     wants_ranges_and_no_etag = !env["HTTP_IF_RANGE"] && env["HTTP_RANGE"]
     wants_no_ranges_and_supplies_etag = env["HTTP_IF_NONE_MATCH"] && !env["HTTP_RANGE"] && !env["HTTP_IF_RANGE"]
 
-    # Very old Rack versions do not have get_byte_ranges and have just byte_ranges
-    http_ranges_from_header = Rack::Utils.respond_to?(:get_byte_ranges) ? Rack::Utils.get_byte_ranges(env["HTTP_RANGE"], resource_size) : Rack::Utils.byte_ranges(env, resource_size)
-    http_ranges_from_header = coalesce_ranges(http_ranges_from_header) if http_ranges_from_header
+    http_ranges_from_header = parse_ranges(env["HTTP_RANGE"], resource_size)
 
     body = if wants_no_ranges_and_supplies_etag && env["HTTP_IF_NONE_MATCH"] == etag
       NotModifiedBody.new

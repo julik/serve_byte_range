@@ -253,4 +253,37 @@ class ServeByteRangeTest < Minitest::Test
     status, _, _ = ServeByteRange.serve_ranges(env, resource_size: 10, etag: 'W/"abc"') { |range, io| io.write("x" * range.size) }
     assert_equal 200, status # If-Range requires a strong match
   end
+
+  def test_serves_overlapping_ranges_whose_sizes_add_up_to_more_than_the_resource
+    bytes = Random.new(Minitest.seed).bytes(150)
+    env = {"HTTP_RANGE" => "bytes=0-99,50-149"}
+    status, headers, body = ServeByteRange.serve_ranges(env, resource_size: bytes.bytesize) { |range, io| io.write(bytes[range]) }
+
+    assert_equal 206, status
+    assert_equal "bytes 0-149/150", headers["Content-Range"]
+    output = StringIO.new.binmode
+    body.each { |chunk| output.write(chunk) }
+    assert_equal bytes, output.string
+  end
+
+  def test_parse_ranges
+    assert_nil ServeByteRange.parse_ranges(nil, 150)
+    assert_nil ServeByteRange.parse_ranges("lines=1-2", 150)
+    assert_nil ServeByteRange.parse_ranges("bytes=5-1", 150)
+    assert_nil ServeByteRange.parse_ranges("bytes=0-1,x", 150) # one bad spec spoils the header
+    assert_equal [], ServeByteRange.parse_ranges("bytes=150-", 150)
+    assert_equal [0..149], ServeByteRange.parse_ranges("bytes=0-99,50-149", 150)
+    assert_equal [0..149], ServeByteRange.parse_ranges("bytes=0-149,0-149,-150", 150)
+    assert_equal [140..149, 0..9], ServeByteRange.parse_ranges("bytes=-10, 0-9", 150)
+    assert_equal [0..9], ServeByteRange.parse_ranges("bytes=0-9,200-300", 150)
+  end
+
+  def test_ignores_range_header_with_too_many_ranges
+    many = (["0-0"] * (ServeByteRange::MAX_RANGES + 1)).join(",")
+    assert_nil ServeByteRange.parse_ranges("bytes=#{many}", 150)
+    assert_equal [0..0], ServeByteRange.parse_ranges("bytes=" + (["0-0"] * ServeByteRange::MAX_RANGES).join(","), 150)
+
+    status, _, _ = ServeByteRange.serve_ranges({"HTTP_RANGE" => "bytes=#{many}"}, resource_size: 150) { |range, io| io.write("x" * range.size) }
+    assert_equal 200, status
+  end
 end
