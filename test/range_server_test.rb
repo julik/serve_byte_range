@@ -211,4 +211,46 @@ class ServeByteRangeTest < Minitest::Test
     # Ordering should be maintained (roughly) in the coalesced ranges
     assert_equal [5..32, 0..0, 145..900, 4..4], ServeByteRange.coalesce_ranges(ordered_ranges)
   end
+
+  def test_quote_etag
+    assert_nil ServeByteRange.quote_etag(nil)
+    assert_equal '"abc"', ServeByteRange.quote_etag("abc")
+    assert_equal '"abc"', ServeByteRange.quote_etag('"abc"')
+    assert_equal 'W/"abc"', ServeByteRange.quote_etag('W/"abc"')
+  end
+
+  def test_serves_weak_etag_as_is
+    status, headers, _ = ServeByteRange.serve_ranges({}, resource_size: 10, etag: 'W/"abc"') { |range, io| io.write("x" * range.size) }
+    assert_equal 200, status
+    assert_equal 'W/"abc"', headers["ETag"]
+  end
+
+  def test_honors_if_range_with_the_etag_it_sent_when_given_unquoted_etag
+    bytes = Random.new(Minitest.seed).bytes(474)
+    serve_proc = ->(range, io) { io.write(bytes[range]) }
+
+    _, headers, _ = ServeByteRange.serve_ranges({}, resource_size: bytes.bytesize, etag: "abc", &serve_proc)
+    assert_equal '"abc"', headers["ETag"]
+
+    env = {"HTTP_RANGE" => "bytes=0-9", "HTTP_IF_RANGE" => headers["ETag"]}
+    status, headers, body = ServeByteRange.serve_ranges(env, resource_size: bytes.bytesize, etag: "abc", &serve_proc)
+    assert_equal 206, status
+    assert_equal "bytes 0-9/474", headers["Content-Range"]
+    output = StringIO.new.binmode
+    body.each { |chunk| output.write(chunk) }
+    assert_equal bytes[0..9], output.string
+  end
+
+  def test_honors_if_none_match_with_the_etag_it_sent_when_given_unquoted_etag
+    env = {"HTTP_IF_NONE_MATCH" => '"abc"'}
+    status, headers, _ = ServeByteRange.serve_ranges(env, resource_size: 10, etag: "abc") { |range, io| io.write("x" * range.size) }
+    assert_equal 304, status
+    assert_equal '"abc"', headers["ETag"]
+  end
+
+  def test_serves_entire_document_on_if_range_with_weak_etag
+    env = {"HTTP_RANGE" => "bytes=0-1", "HTTP_IF_RANGE" => 'W/"abc"'}
+    status, _, _ = ServeByteRange.serve_ranges(env, resource_size: 10, etag: 'W/"abc"') { |range, io| io.write("x" * range.size) }
+    assert_equal 200, status # If-Range requires a strong match
+  end
 end

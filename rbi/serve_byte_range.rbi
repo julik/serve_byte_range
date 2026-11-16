@@ -26,6 +26,23 @@ module ServeByteRange
   sig { params(ranges: T::Array[T::Range[T.untyped]]).returns(T::Array[T.untyped]) }
   def self.coalesce_ranges(ranges); end
 
+  # Quotes the ETag unless it already is a quoted strong or weak (`W/"..."`) entity tag
+  # 
+  # _@param_ `etag` — the ETag, quoted or not
+  # 
+  # _@return_ — the quoted ETag
+  sig { params(etag: T.nilable(String)).returns(T.nilable(String)) }
+  def self.quote_etag(etag); end
+
+  # If-Range must use the strong comparison, so a weak ETag never matches.
+  # See https://www.rfc-editor.org/rfc/rfc9110#section-13.1.5
+  # 
+  # _@param_ `header_value` — the value of the If-Range header
+  # 
+  # _@param_ `etag` — the quoted current ETag
+  sig { params(header_value: String, etag: T.nilable(String)).returns(T::Boolean) }
+  def self.strong_etag_match?(header_value, etag); end
+
   # _@param_ `env` — the Rack env
   # 
   # _@param_ `resource_size` — the size of the complete resource in bytes

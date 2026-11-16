@@ -245,6 +245,27 @@ module ServeByteRange
     indices.uniq.map { |i| coalesced_sorted_ranges.fetch(i) }
   end
 
+  # Quotes the ETag unless it already is a quoted strong or weak (`W/"..."`) entity tag
+  #
+  # @param etag[String,nil] the ETag, quoted or not
+  # @return [String,nil] the quoted ETag
+  def self.quote_etag(etag)
+    return if etag.nil?
+    etag = etag.to_s
+    etag.match?(/\A(W\/)?".*"\z/) ? etag : %("#{etag}")
+  end
+
+  # If-Range must use the strong comparison, so a weak ETag never matches.
+  # See https://www.rfc-editor.org/rfc/rfc9110#section-13.1.5
+  #
+  # @param header_value[String] the value of the If-Range header
+  # @param etag[String,nil] the quoted current ETag
+  # @return [Boolean]
+  def self.strong_etag_match?(header_value, etag)
+    return false if etag.nil? || etag.start_with?("W/")
+    header_value.strip == etag
+  end
+
   # @param env[Hash] the Rack env
   # @param resource_size[Integer] the size of the complete resource in bytes
   # @param etag[String] the current ETag of the resource, or nil if none
@@ -259,12 +280,14 @@ module ServeByteRange
   #     [status, headers, body]
   # @return [Array] the Rack response triplet of `[status, header_hash, enumerable_body]`
   def self.serve_ranges(env, resource_size:, etag: nil, resource_content_type: "binary/octet-stream", multipart_boundary: generate_boundary, &range_serving_block)
+    etag = quote_etag(etag)
+
     # As per RFC:
     # If the entity tag given in the If-Range header matches the current cache validator for the entity,
     # then the server SHOULD provide the specified sub-range of the entity using a 206 (Partial Content)
     # response. If the cache validator does not match, then the server SHOULD return the entire entity
     # using a 200 (OK) response.
-    wants_ranges_and_etag_valid = env["HTTP_IF_RANGE"] && env["HTTP_IF_RANGE"] == etag && env["HTTP_RANGE"]
+    wants_ranges_and_etag_valid = env["HTTP_IF_RANGE"] && strong_etag_match?(env["HTTP_IF_RANGE"], etag) && env["HTTP_RANGE"]
     wants_ranges_and_no_etag = !env["HTTP_IF_RANGE"] && env["HTTP_RANGE"]
     wants_no_ranges_and_supplies_etag = env["HTTP_IF_NONE_MATCH"] && !env["HTTP_RANGE"] && !env["HTTP_IF_RANGE"]
 
@@ -288,8 +311,6 @@ module ServeByteRange
       WholeBody.new(resource_size: resource_size, resource_content_type: resource_content_type, &range_serving_block)
     end
     headers = body.headers
-
-    etag = etag.inspect if etag && !etag.match?(/^".+"$/)
     headers["ETag"] = etag if etag
 
     [body.status, headers, body]
