@@ -273,7 +273,8 @@ module ServeByteRange
   def self.quote_etag(etag)
     return if etag.nil?
     etag = etag.to_s
-    etag.match?(/\A(W\/)?".*"\z/) ? etag : %("#{etag}")
+    # A double quote is not allowed inside an entity tag, so stray ones from botched quoting get dropped
+    etag.match?(/\A(W\/)?"[^"]*"\z/) ? etag : %("#{etag.delete('"')}")
   end
 
   # If-Range must use the strong comparison, so a weak ETag never matches.
@@ -303,7 +304,7 @@ module ServeByteRange
 
   # @param env[Hash] the Rack env
   # @param resource_size[Integer] the size of the complete resource in bytes
-  # @param etag[String] the current ETag of the resource, or nil if none
+  # @param etag[String,nil] the current ETag of the resource, or nil if none
   # @param resource_content_type[String] the MIME type string of the resource
   # @param multipart_boundary[String] The string to use as multipart boundary. Default is an automatically generated pseudo-random string.
   # @yield [range[Range], io[IO]] The HTTP range being requested and the IO(ish) object to `write()` the bytes into
@@ -357,7 +358,7 @@ module ServeByteRange
   #
   # @param env[Hash] the Rack env
   # @param sequence[Sequence] the Sequence to serve
-  # @param etag[String] the ETag of the resource, defaults to the ETag of the Sequence
+  # @param etag[String,nil] the ETag of the resource, defaults to the ETag of the Sequence. Pass nil to not send one
   # @param options[Hash] other options for {serve_ranges}
   # @yield [segment[Object], range_in_segment[Range], io[IO]] The segment, the range of bytes within it, and the IO(ish) object to `write()` those bytes into
   # @return [Array] the Rack response triplet of `[status, header_hash, enumerable_body]`
