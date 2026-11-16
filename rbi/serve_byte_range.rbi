@@ -298,8 +298,9 @@ module ServeByteRange
     sig { params(segment: Object, size: Integer, etag: T.nilable(T.any(String, Integer))).returns(T.self_type) }
     def add_segment(segment, size:, etag: nil); end
 
-    # Adds a String (sized in bytes and validated by its contents), a Sequence, or an object
-    # responding to `bytesize` or `size`
+    # Adds a String (sized in bytes and validated by its contents), a Sequence, an object responding
+    # to `bytesize`, or an IO-ish object (responding to `read` and `size`, like File, StringIO or Tempfile).
+    # Anything else needs an explicit size, so use {#add_segment} for it.
     # 
     # _@param_ `segment`
     sig { params(segment: T.any(String, Sequence, Object)).returns(T.self_type) }

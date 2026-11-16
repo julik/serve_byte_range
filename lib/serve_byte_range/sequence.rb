@@ -45,8 +45,9 @@ module ServeByteRange
       self
     end
 
-    # Adds a String (sized in bytes and validated by its contents), a Sequence, or an object
-    # responding to `bytesize` or `size`
+    # Adds a String (sized in bytes and validated by its contents), a Sequence, an object responding
+    # to `bytesize`, or an IO-ish object (responding to `read` and `size`, like File, StringIO or Tempfile).
+    # Anything else needs an explicit size, so use {#add_segment} for it.
     #
     # @param segment[String,Sequence,Object]
     # @return [self]
@@ -57,7 +58,14 @@ module ServeByteRange
       when Sequence
         add_segment(segment, size: segment.size, etag: segment.strong_etag? ? segment.etag : nil)
       else
-        size = segment.respond_to?(:bytesize) ? segment.bytesize : segment.size
+        # A bare `size` is an element count for an Array or a Hash, so only trust it for IO-ish objects
+        size = if segment.respond_to?(:bytesize)
+          segment.bytesize
+        elsif segment.respond_to?(:read) && segment.respond_to?(:size)
+          segment.size
+        else
+          raise ArgumentError, "Can not tell the size in bytes of a #{segment.class}, use add_segment with an explicit size:"
+        end
         add_segment(segment, size: size)
       end
     end
