@@ -83,10 +83,34 @@ module ServeByteRange
   end
   def self.serve_ranges(env, resource_size:, etag: nil, resource_content_type: "binary/octet-stream", multipart_boundary: generate_boundary, &range_serving_block); end
 
+  # Serves a {Sequence}, yielding every segment that a requested range touches. Writes for every
+  # segment are checked against the size of the range within that segment.
+  # 
+  # _@param_ `env` — the Rack env
+  # 
+  # _@param_ `sequence` — the Sequence to serve
+  # 
+  # _@param_ `etag` — the ETag of the resource, defaults to the ETag of the Sequence
+  # 
+  # _@param_ `options` — other options for {serve_ranges}
+  # 
+  # _@return_ — the Rack response triplet of `[status, header_hash, enumerable_body]`
+  sig do
+    params(
+      env: T::Hash[T.untyped, T.untyped],
+      sequence: Sequence,
+      etag: String,
+      options: T::Hash[T.untyped, T.untyped],
+      segment_serving_block: T.untyped
+    ).returns(T::Array[T.untyped])
+  end
+  def self.serve_sequence(env, sequence, etag: sequence.etag, **options, &segment_serving_block); end
+
   class BlockWritableWithLimit
     # sord omit - no YARD type given for "limit", using untyped
-    sig { params(limit: T.untyped, block_that_accepts_writes: T.untyped).void }
-    def initialize(limit, &block_that_accepts_writes); end
+    # sord omit - no YARD type given for "label:", using untyped
+    sig { params(limit: T.untyped, label: T.untyped, block_that_accepts_writes: T.untyped).void }
+    def initialize(limit, label: "range", &block_that_accepts_writes); end
 
     # sord omit - no YARD type given for "string", using untyped
     # sord omit - no YARD return type given, using untyped
@@ -230,5 +254,72 @@ module ServeByteRange
     # sord omit - no YARD return type given, using untyped
     sig { params(http_range: T.untyped, part_index: T.untyped).returns(T.untyped) }
     def part_header(http_range, part_index); end
+  end
+
+  # A resource composed of several segments glued together - for example, byte ranges of objects
+  # in remote storage interleaved with literal strings. A segment can be any object, since its
+  # size is given explicitly. A Sequence can also be a segment of another Sequence.
+  # 
+  # @example
+  #     seq = ServeByteRange::Sequence.new
+  #     seq.add_segment(s3_object, size: 1024, etag: s3_object.etag)
+  #     seq << "Literal text"
+  #     ServeByteRange.serve_sequence(env, seq) do |segment, range_in_segment, io|
+  #       io.write(segment.is_a?(String) ? segment.byteslice(range_in_segment) : fetch_range(segment, range_in_segment))
+  #     end
+  class Sequence
+    # _@param_ `segments` — segments to add with `<<`
+    sig { params(segments: T::Array[T.untyped]).void }
+    def initialize(*segments); end
+
+    # Adds a segment of a given size. Segments of zero size are skipped.
+    # 
+    # _@param_ `segment` — any object, it gets yielded back when serving
+    # 
+    # _@param_ `size` — the size of the segment in bytes
+    # 
+    # _@param_ `etag` — a validator for the segment, which goes into the ETag of the Sequence. Defaults to the size, which won't catch content changes that keep the size the same.
+    sig { params(segment: Object, size: Integer, etag: T.any(String, Integer)).returns(T.self_type) }
+    def add_segment(segment, size:, etag: size); end
+
+    # Adds a String (sized in bytes and validated by its contents), a Sequence, or an object
+    # responding to `bytesize` or `size`
+    # 
+    # _@param_ `segment`
+    sig { params(segment: T.any(String, Sequence, Object)).returns(T.self_type) }
+    def <<(segment); end
+
+    # _@return_ — a quoted ETag derived from the ETags of all the segments
+    sig { returns(String) }
+    def etag; end
+
+    # Yields every segment the range touches, along with the inclusive range of bytes within that segment.
+    # Nested Sequences are descended into, so only the leaf segments get yielded.
+    # 
+    # _@param_ `range` — an inclusive range of bytes within the Sequence
+    sig { params(range: T::Range[T.untyped], blk: T.untyped).void }
+    def each_in_range(range, &blk); end
+
+    # _@return_ — the total size of all segments in bytes
+    sig { returns(Integer) }
+    attr_reader :size
+
+    class Interval < Struct
+      # Returns the value of attribute segment
+      sig { returns(Object) }
+      attr_accessor :segment
+
+      # Returns the value of attribute size
+      sig { returns(Object) }
+      attr_accessor :size
+
+      # Returns the value of attribute offset
+      sig { returns(Object) }
+      attr_accessor :offset
+
+      # Returns the value of attribute etag
+      sig { returns(Object) }
+      attr_accessor :etag
+    end
   end
 end

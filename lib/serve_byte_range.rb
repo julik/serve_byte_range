@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
 require "rack"
+require_relative "serve_byte_range/sequence"
 
 module ServeByteRange
   class BlockWritableWithLimit
-    def initialize(limit, &block_that_accepts_writes)
+    def initialize(limit, label: "range", &block_that_accepts_writes)
       @limit = limit
+      @label = label
       @written = 0
       @block_that_accepts_bytes = block_that_accepts_writes
     end
@@ -13,14 +15,14 @@ module ServeByteRange
     def write(string)
       return 0 if string.empty?
       would_have_output = @written + string.bytesize
-      raise "You are trying to write more than advertised - #{would_have_output} bytes, the limit for this range is #{@limit}" if @limit < would_have_output
+      raise "You are trying to write more than advertised - #{would_have_output} bytes, the limit for this #{@label} is #{@limit}" if @limit < would_have_output
       @written += string.bytesize
       @block_that_accepts_bytes.call(string.b)
       string.bytesize
     end
 
     def verify!
-      raise "You wrote #{@written} bytes but the range requires #{@limit} bytes" unless @written == @limit
+      raise "You wrote #{@written} bytes but the #{@label} requires #{@limit} bytes" unless @written == @limit
     end
   end
 
@@ -328,5 +330,25 @@ module ServeByteRange
     headers["ETag"] = etag if etag
 
     [body.status, headers, body]
+  end
+
+  # Serves a {Sequence}, yielding every segment that a requested range touches. Writes for every
+  # segment are checked against the size of the range within that segment.
+  #
+  # @param env[Hash] the Rack env
+  # @param sequence[Sequence] the Sequence to serve
+  # @param etag[String] the ETag of the resource, defaults to the ETag of the Sequence
+  # @param options[Hash] other options for {serve_ranges}
+  # @yield [segment[Object], range_in_segment[Range], io[IO]] The segment, the range of bytes within it, and the IO(ish) object to `write()` those bytes into
+  # @return [Array] the Rack response triplet of `[status, header_hash, enumerable_body]`
+  def self.serve_sequence(env, sequence, etag: sequence.etag, **options, &segment_serving_block)
+    serve_ranges(env, resource_size: sequence.size, etag: etag, **options) do |range, io|
+      sequence.each_in_range(range) do |segment, range_in_segment|
+        label = "segment (#{segment.class}, bytes #{range_in_segment.begin}-#{range_in_segment.end} of it)"
+        segment_io = BlockWritableWithLimit.new(range_in_segment.size, label: label) { |bytes| io.write(bytes) }
+        segment_serving_block.call(segment, range_in_segment, segment_io)
+        segment_io.verify!
+      end
+    end
   end
 end

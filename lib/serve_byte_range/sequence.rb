@@ -1,0 +1,91 @@
+# frozen_string_literal: true
+
+require "digest"
+
+module ServeByteRange
+  # A resource composed of several segments glued together - for example, byte ranges of objects
+  # in remote storage interleaved with literal strings. A segment can be any object, since its
+  # size is given explicitly. A Sequence can also be a segment of another Sequence.
+  #
+  # @example
+  #     seq = ServeByteRange::Sequence.new
+  #     seq.add_segment(s3_object, size: 1024, etag: s3_object.etag)
+  #     seq << "Literal text"
+  #     ServeByteRange.serve_sequence(env, seq) do |segment, range_in_segment, io|
+  #       io.write(segment.is_a?(String) ? segment.byteslice(range_in_segment) : fetch_range(segment, range_in_segment))
+  #     end
+  class Sequence
+    Interval = Struct.new(:segment, :size, :offset, :etag)
+    private_constant :Interval
+
+    # @return [Integer] the total size of all segments in bytes
+    attr_reader :size
+
+    # @param segments[Array] segments to add with `<<`
+    def initialize(*segments)
+      @intervals = []
+      @size = 0
+      segments.each { |segment| self << segment }
+    end
+
+    # Adds a segment of a given size. Segments of zero size are skipped.
+    #
+    # @param segment[Object] any object, it gets yielded back when serving
+    # @param size[Integer] the size of the segment in bytes
+    # @param etag[String,Integer] a validator for the segment, which goes into the ETag of the Sequence.
+    #   Defaults to the size, which won't catch content changes that keep the size the same.
+    # @return [self]
+    def add_segment(segment, size:, etag: size)
+      raise ArgumentError, "Segment size must be an Integer >= 0, but was #{size.inspect}" unless size.is_a?(Integer) && size >= 0
+      return self if size.zero?
+      @intervals << Interval.new(segment, size, @size, etag.to_s)
+      @size += size
+      self
+    end
+
+    # Adds a String (sized in bytes and validated by its contents), a Sequence, or an object
+    # responding to `bytesize` or `size`
+    #
+    # @param segment[String,Sequence,Object]
+    # @return [self]
+    def <<(segment)
+      case segment
+      when String
+        add_segment(segment, size: segment.bytesize, etag: Digest::SHA1.hexdigest(segment))
+      when Sequence
+        add_segment(segment, size: segment.size, etag: segment.etag)
+      else
+        size = segment.respond_to?(:bytesize) ? segment.bytesize : segment.size
+        add_segment(segment, size: size)
+      end
+    end
+
+    # @return [String] a quoted ETag derived from the ETags of all the segments
+    def etag
+      '"%s"' % Digest::SHA1.hexdigest(@intervals.map(&:etag).join("\0"))
+    end
+
+    # Yields every segment the range touches, along with the inclusive range of bytes within that segment.
+    # Nested Sequences are descended into, so only the leaf segments get yielded.
+    #
+    # @param range[Range] an inclusive range of bytes within the Sequence
+    # @yield [segment[Object], range_in_segment[Range]]
+    # @return [void]
+    def each_in_range(range, &blk)
+      return enum_for(:each_in_range, range) unless blk
+      i = @intervals.bsearch_index { |iv| iv.offset + iv.size > range.begin }
+      return unless i
+
+      while (iv = @intervals[i]) && iv.offset <= range.end
+        from = [range.begin, iv.offset].max - iv.offset
+        to = [range.end, iv.offset + iv.size - 1].min - iv.offset
+        if iv.segment.is_a?(Sequence)
+          iv.segment.each_in_range(from..to, &blk)
+        else
+          yield(iv.segment, from..to)
+        end
+        i += 1
+      end
+    end
+  end
+end
