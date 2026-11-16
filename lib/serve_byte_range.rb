@@ -5,6 +5,9 @@ require_relative "serve_byte_range/sequence"
 
 module ServeByteRange
   class BlockWritableWithLimit
+    COPY_ON_WRITE_SAFE_WITH_COPY_STREAM = Gem::Version.new(RUBY_VERSION) >= Gem::Version.new("3.2")
+    private_constant :COPY_ON_WRITE_SAFE_WITH_COPY_STREAM
+
     # Yields a writable which passes the bytes on to `sink`, and makes sure exactly `limit` bytes got written
     #
     # @param limit[Integer] how many bytes have to be written
@@ -44,9 +47,14 @@ module ServeByteRange
 
     private
 
-    # On Ruby 2.7 and 3.0 both `b` and `dup` share the memory of the copied string, and IO.copy_stream
-    # then overwrites the "copy" when it reads into its buffer again. Appending copies the bytes for real.
+    # `b` and `dup` do not copy the bytes, they share the memory with the original until either gets
+    # modified. IO.copy_stream on Ruby 2.7 to 3.1 reads into its buffer without breaking that sharing,
+    # so our "copy" got overwritten while the webserver still held on to it. There we have to copy
+    # the bytes for real by appending, which may eat memory: every chunk gets duplicated, and so does a
+    # huge string written in one go (100MB of `body.read` briefly takes 200MB). Starting with 3.2
+    # IO.copy_stream un-shares its buffer before reading into it, so the cheap `b` is safe.
     def binary_copy(string)
+      return string.b if COPY_ON_WRITE_SAFE_WITH_COPY_STREAM
       (String.new(capacity: string.bytesize, encoding: Encoding::BINARY) << string).force_encoding(Encoding::BINARY)
     end
 
