@@ -28,3 +28,14 @@ You can also retrieve the `range_in_file` from an external resource, you can als
 * Will be correctly pre-sized with `Content-Length`
 * Will not be generated and buffered eagerly, but will get generated as you serve the content out
 
+
+## Development
+
+Range parsing is delegated to Rack, and its behavior differs between Rack versions. To run the tests against a specific major version of Rack:
+
+```shell
+BUNDLE_GEMFILE=gemfiles/rack_2.gemfile bundle install
+BUNDLE_GEMFILE=gemfiles/rack_2.gemfile bundle exec rake test
+```
+
+CI runs the tests against both `gemfiles/rack_2.gemfile` and `gemfiles/rack_3.gemfile`.

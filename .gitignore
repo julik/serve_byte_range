@@ -56,3 +56,5 @@ tmp
 rubocop.html
 
 pkg/*.gem
+
+gemfiles/*.lock
