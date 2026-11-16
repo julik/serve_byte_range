@@ -17,9 +17,9 @@ module ServeByteRange
       would_have_output = @written + string.bytesize
       raise "You are trying to write more than advertised - #{would_have_output} bytes, the limit for this #{@label} is #{@limit}" if @limit < would_have_output
       @written += string.bytesize
-      # A BINARY string is passed through without copying. IO.copy_stream reuses one buffer for all
-      # of its writes, so whatever consumes the chunks must not hold on to them after the call
-      binary_string = (string.encoding == Encoding::BINARY) ? string : string.b
+      # Only a frozen string can be passed on without copying. IO.copy_stream reuses one buffer for all
+      # of its writes, and Rack::ETag and friends hold on to the chunks they get
+      binary_string = (string.frozen? && string.encoding == Encoding::BINARY) ? string : string.b
       @block_that_accepts_bytes.call(binary_string)
       string.bytesize
     end
