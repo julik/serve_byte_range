@@ -280,4 +280,19 @@ class ServeByteRangeTest < Minitest::Test
     assert_equal 304, status
     refute headers.key?("ETag")
   end
+
+  def test_passes_binary_strings_through_without_copying
+    yielded = []
+    writable = ServeByteRange::BlockWritableWithLimit.new(8) { |chunk| yielded << chunk }
+    binary = "abcd".b
+    utf8 = "éé"
+    writable.write(binary)
+    writable.write(utf8)
+    writable.verify!
+
+    assert_same binary, yielded[0]
+    refute_same utf8, yielded[1]
+    assert_equal Encoding::BINARY, yielded[1].encoding
+    assert_equal Encoding::UTF_8, utf8.encoding # the caller's string must not get re-encoded
+  end
 end
