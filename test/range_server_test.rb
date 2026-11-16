@@ -308,4 +308,18 @@ class ServeByteRangeTest < Minitest::Test
     body.each { |chunk| retained << chunk } # what Rack::ETag does
     assert_equal bytes, retained.join
   end
+
+  def test_serves_not_modified_on_matching_if_none_match_even_with_a_range
+    env = {"HTTP_RANGE" => "bytes=0-1", "HTTP_IF_NONE_MATCH" => '"abc"'}
+    status, _, _ = ServeByteRange.serve_ranges(env, resource_size: 10, etag: "abc") { |range, io| io.write("x" * range.size) }
+    assert_equal 304, status
+
+    env = {"HTTP_RANGE" => "bytes=0-1", "HTTP_IF_RANGE" => '"abc"', "HTTP_IF_NONE_MATCH" => '"abc"'}
+    status, _, _ = ServeByteRange.serve_ranges(env, resource_size: 10, etag: "abc") { |range, io| io.write("x" * range.size) }
+    assert_equal 304, status
+
+    env = {"HTTP_RANGE" => "bytes=0-1", "HTTP_IF_NONE_MATCH" => '"old"'}
+    status, _, _ = ServeByteRange.serve_ranges(env, resource_size: 10, etag: "abc") { |range, io| io.write("x" * range.size) }
+    assert_equal 206, status
+  end
 end
