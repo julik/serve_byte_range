@@ -33,7 +33,7 @@ module ServeByteRange
       @written += string.bytesize
       # Only a frozen string can be passed on without copying. IO.copy_stream reuses one buffer for all
       # of its writes, and Rack::ETag and friends hold on to the chunks they get
-      binary_string = (string.frozen? && string.encoding == Encoding::BINARY) ? string : string.b
+      binary_string = (string.frozen? && string.encoding == Encoding::BINARY) ? string : binary_copy(string)
       @block_that_accepts_bytes.call(binary_string)
       string.bytesize
     end
@@ -43,6 +43,12 @@ module ServeByteRange
     end
 
     private
+
+    # On Ruby 2.7 and 3.0 both `b` and `dup` share the memory of the copied string, and IO.copy_stream
+    # then overwrites the "copy" when it reads into its buffer again. Appending copies the bytes for real.
+    def binary_copy(string)
+      (String.new(capacity: string.bytesize, encoding: Encoding::BINARY) << string).force_encoding(Encoding::BINARY)
+    end
 
     def label
       @label.respond_to?(:call) ? @label.call : @label
