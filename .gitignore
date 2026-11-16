@@ -5,9 +5,8 @@ coverage.data
 # rdoc generated
 rdoc
 
-# yard generated
+# rdoc generated
 doc
-.yardoc
 
 # Rubocop
 rubocop.html

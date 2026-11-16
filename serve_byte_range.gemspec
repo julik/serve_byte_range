@@ -24,13 +24,12 @@ Gem::Specification.new do |spec|
   spec.bindir = "exe"
   spec.executables = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
+  spec.rdoc_options = ["--markup", "markdown", "--main", "README.md"]
+  spec.extra_rdoc_files = ["README.md"]
 
   spec.add_dependency "rack", ">= 1.0"
 
   spec.add_development_dependency "minitest"
   spec.add_development_dependency "rake"
   spec.add_development_dependency "standard", "1.28.5" # Needed for 2.6
-  spec.add_development_dependency "yard", "~> 0.9"
-  spec.add_development_dependency "sord"
-  spec.add_development_dependency "redcarpet"
 end

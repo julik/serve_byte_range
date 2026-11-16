@@ -1,0 +1,256 @@
+# Generated from lib/serve_byte_range.rb with RBS::Inline
+
+# Serves HTTP `Range` requests lazily - see ServeByteRange.serve_ranges and ServeByteRange.serve_sequence
+module ServeByteRange
+  type serving_block = ^(Range[Integer] range, BlockWritableWithLimit io) -> void
+
+  type rack_response = [ Integer, Hash[String, String], ByteRangeBody | EmptyBody ]
+
+  # The IO-ish object the serving blocks write into. Passes the bytes on and makes sure the
+  # amount of bytes written matches what was advertised in `Content-Length`
+  class BlockWritableWithLimit
+    COPY_ON_WRITE_SAFE_WITH_COPY_STREAM: bool
+
+    @limit: Integer
+
+    @label: String | ^() -> String
+
+    @written: Integer
+
+    @block_that_accepts_bytes: ^(String) -> void
+
+    # Yields a writable which passes the bytes on to `sink`, and makes sure exactly `limit` bytes got written.
+    # The `label` can be a callable returning the String, so that it only gets built when there is an error.
+    #
+    #     @rbs limit: Integer -- how many bytes have to be written
+    #     @rbs sink: ^(String) -> void -- receives the written bytes
+    #     @rbs label: String | ^() -> String -- what is being written, for the error messages
+    #     @rbs &block: (BlockWritableWithLimit io) -> void
+    #     @rbs return: void
+    def self.write_exactly: (Integer limit, ^(String) -> void sink, ?label: String | ^() -> String) { (BlockWritableWithLimit io) -> void } -> void
+
+    # @rbs limit: Integer
+    # @rbs label: String | ^() -> String
+    # @rbs &block_that_accepts_writes: (String) -> void
+    def initialize: (Integer limit, ?label: String | ^() -> String) { (String) -> void } -> untyped
+
+    # @rbs string: String
+    # @rbs return: Integer
+    def write: (String string) -> Integer
+
+    # @rbs return: void
+    def verify!: () -> void
+
+    private
+
+    # `b` and `dup` do not copy the bytes, they share the memory with the original until either gets
+    # modified. IO.copy_stream on Ruby 2.7 to 3.1 reads into its buffer without breaking that sharing,
+    # so our "copy" got overwritten while the webserver still held on to it. There we have to copy
+    # the bytes for real by appending, which may eat memory: every chunk gets duplicated, and so does a
+    # huge string written in one go (100MB of `body.read` briefly takes 200MB). Starting with 3.2
+    # IO.copy_stream un-shares its buffer before reading into it, so the cheap `b` is safe.
+    #     @rbs string: String
+    #     @rbs return: String
+    def binary_copy: (String string) -> String
+
+    # @rbs return: String
+    def label: () -> String
+  end
+
+  class ByteRangeBody
+    @http_range: Range[Integer]
+
+    @resource_size: Integer
+
+    @resource_content_type: String
+
+    @serving_block: serving_block
+
+    # @rbs http_range: Range[Integer]
+    # @rbs resource_size: Integer
+    # @rbs resource_content_type: String
+    # @rbs &serving_block: (Range[Integer] range, BlockWritableWithLimit io) -> void
+    def initialize: (http_range: Range[Integer], resource_size: Integer, ?resource_content_type: String) { (Range[Integer] range, BlockWritableWithLimit io) -> void } -> untyped
+
+    # @rbs return: Integer
+    def status: () -> Integer
+
+    # @rbs &blk: (String) -> void
+    # @rbs return: void
+    def each: () { (String) -> void } -> void
+
+    # @rbs return: Integer
+    def content_length: () -> Integer
+
+    # @rbs return: String
+    def content_type: () -> String
+
+    # @rbs return: Hash[String, String]
+    def headers: () -> Hash[String, String]
+  end
+
+  class EmptyBody
+    # @rbs return: Integer
+    def status: () -> Integer
+
+    # @rbs return: Integer
+    def content_length: () -> Integer
+
+    # @rbs &blk: (String) -> void
+    # @rbs return: void
+    def each: () { (String) -> void } -> void
+
+    # @rbs return: Hash[String, String]
+    def headers: () -> Hash[String, String]
+  end
+
+  class NotModifiedBody < EmptyBody
+    # @rbs return: Integer
+    def status: () -> Integer
+  end
+
+  class WholeBody < ByteRangeBody
+    # @rbs resource_size: Integer
+    # @rbs resource_content_type: String
+    # @rbs &serving_block: (Range[Integer] range, BlockWritableWithLimit io) -> void
+    def initialize: (resource_size: Integer, ?resource_content_type: String) { (Range[Integer] range, BlockWritableWithLimit io) -> void } -> untyped
+
+    # @rbs return: Integer
+    def status: () -> Integer
+
+    # @rbs return: Hash[String, String]
+    def headers: () -> Hash[String, String]
+  end
+
+  class Unsatisfiable < EmptyBody
+    @resource_size: Integer
+
+    # @rbs resource_size: Integer
+    def initialize: (resource_size: Integer) -> untyped
+
+    # @rbs return: Integer
+    def status: () -> Integer
+
+    # @rbs return: Hash[String, String]
+    def headers: () -> Hash[String, String]
+  end
+
+  # See https://www.ietf.org/archive/id/draft-ietf-httpbis-p5-range-09.html
+  class MultipartByteRangesBody < ByteRangeBody
+    @http_ranges: Array[Range[Integer]]
+
+    @boundary: String
+
+    @envelope_size: Integer?
+
+    # @rbs http_ranges: Array[Range[Integer]]
+    # @rbs boundary: String
+    # @rbs resource_size: Integer
+    # @rbs resource_content_type: String
+    # @rbs &serving_block: (Range[Integer] range, BlockWritableWithLimit io) -> void
+    def initialize: (http_ranges: Array[Range[Integer]], boundary: String, resource_size: Integer, ?resource_content_type: String) { (Range[Integer] range, BlockWritableWithLimit io) -> void } -> untyped
+
+    # @rbs &blk: (String) -> void
+    # @rbs return: void
+    def each: () { (String) -> void } -> void
+
+    # @rbs return: Integer
+    def content_length: () -> Integer
+
+    # @rbs return: String
+    def content_type: () -> String
+
+    # @rbs return: Hash[String, String]
+    def headers: () -> Hash[String, String]
+
+    private
+
+    # @rbs return: Integer
+    def compute_envelope_size: () -> Integer
+
+    # @rbs return: String
+    def trailer: () -> String
+
+    # @rbs http_range: Range[Integer]
+    # @rbs part_index: Integer
+    # @rbs return: String
+    def part_header: (Range[Integer] http_range, Integer part_index) -> String
+  end
+
+  # Strictly - the boundary is supposed to not appear in any of the parts of the multipart response, so _first_
+  # you need to scan the response, pick a byte sequence that does not occur in it, and then use that. In practice,
+  # nobody does that - and a well-behaved HTTP client should honor the Content-Range header when extracting
+  # the byte range from the response. See https://stackoverflow.com/questions/37413715
+  #
+  #     @rbs return: String
+  def self.generate_boundary: () -> String
+
+  # The RFC specifically gives an example of non-canonical, but still
+  # valid request for overlapping ranges:
+  #
+  # > Several legal but not canonical specifications of the second 500
+  # > bytes (byte offsets 500-999, inclusive):
+  #
+  #     bytes=500-600,601-999
+  #     bytes=500-700,601-999
+  #
+  # In such cases, ranges need to be collapsed together. First, to avoid serving
+  # a tiny byte range over and over - causing excessive requests to upstream,
+  # second - to optimize for doing less requests in total.
+  #
+  #     @rbs ranges: Array[Range[Integer]] -- inclusive, limited ranges of integers
+  #     @rbs return: Array[Range[Integer]] -- ranges squashed together honoring their overlaps
+  def self.coalesce_ranges: (Array[Range[Integer]] ranges) -> Array[Range[Integer]]
+
+  # Quotes the ETag unless it already is a quoted strong or weak (`W/"..."`) entity tag
+  #
+  #     @rbs etag: untyped -- the ETag, quoted or not
+  #     @rbs return: String?
+  def self.quote_etag: (untyped etag) -> String?
+
+  # If-Range must use the strong comparison, so a weak ETag never matches.
+  # See https://www.rfc-editor.org/rfc/rfc9110#section-13.1.5
+  #
+  #     @rbs header_value: String -- the value of the If-Range header
+  #     @rbs etag: String? -- the quoted current ETag
+  #     @rbs return: bool
+  def self.strong_etag_match?: (String header_value, String? etag) -> bool
+
+  # If-None-Match is `*` or a list of entity tags, compared with the weak comparison.
+  # See https://www.rfc-editor.org/rfc/rfc9110#section-13.1.2
+  #
+  #     @rbs header_value: String -- the value of the If-None-Match header
+  #     @rbs etag: String? -- the quoted current ETag
+  #     @rbs return: bool
+  def self.weak_etag_match?: (String header_value, String? etag) -> bool
+
+  # Serves a resource of `resource_size` bytes, yielding every range that has to be sent along with
+  # the IO-ish object to `write()` the bytes of that range into. Returns the Rack response triplet:
+  #
+  #     status, headers, body = ServeByteRange.serve_ranges(env, resource_size: file.size) do |range, io|
+  #       IO.copy_stream(file, io, range.size, range.begin)
+  #     end
+  #     [status, headers, body]
+  #
+  #     @rbs env: Hash[String, untyped] -- the Rack env
+  #     @rbs resource_size: Integer -- the size of the complete resource in bytes
+  #     @rbs etag: untyped -- the current ETag of the resource, or nil if none
+  #     @rbs resource_content_type: String -- the MIME type string of the resource
+  #     @rbs multipart_boundary: String -- defaults to an automatically generated pseudo-random string
+  #     @rbs &range_serving_block: (Range[Integer] range, BlockWritableWithLimit io) -> void
+  #     @rbs return: rack_response
+  def self.serve_ranges: (Hash[String, untyped] env, resource_size: Integer, ?etag: untyped, ?resource_content_type: String, ?multipart_boundary: String) { (Range[Integer] range, BlockWritableWithLimit io) -> void } -> rack_response
+
+  # Serves a Sequence, yielding every segment that a requested range touches, the range of bytes within
+  # that segment and the IO-ish object to `write()` those bytes into. Writes for every segment are checked
+  # against the size of the range within that segment.
+  #
+  #     @rbs env: Hash[String, untyped] -- the Rack env
+  #     @rbs sequence: Sequence -- the Sequence to serve
+  #     @rbs etag: untyped -- defaults to the ETag of the Sequence, pass nil to not send one
+  #     @rbs resource_content_type: String -- the MIME type string of the resource
+  #     @rbs multipart_boundary: String -- defaults to an automatically generated pseudo-random string
+  #     @rbs &segment_serving_block: (untyped segment, Range[Integer] range_in_segment, BlockWritableWithLimit io) -> void
+  #     @rbs return: rack_response
+  def self.serve_sequence: (Hash[String, untyped] env, Sequence sequence, ?etag: untyped, ?resource_content_type: String, ?multipart_boundary: String) { (untyped segment, Range[Integer] range_in_segment, BlockWritableWithLimit io) -> void } -> rack_response
+end
