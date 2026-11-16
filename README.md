@@ -28,6 +28,8 @@ You can also retrieve the `range_in_file` from an external resource, you can als
 * Will be correctly pre-sized with `Content-Length`
 * Will not be generated and buffered eagerly, but will get generated as you serve the content out
 
+Strings you `write` which are already in the `BINARY` encoding get passed on to the webserver without copying. `IO.copy_stream` and `IO#readpartial` with a buffer reuse the same `String` for every chunk, so if anything between you and the socket retains the chunks instead of writing them out immediately (a buffering middleware, for example), it will end up with clobbered data. In that case, `dup` the strings yourself before writing them.
+
 
 ## Serving a resource made of several segments
 
