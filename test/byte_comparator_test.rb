@@ -19,7 +19,7 @@ class ByteComparatorTest < Minitest::Test
     actual = "0123456789abXdef".b
     error = assert_raises(Minitest::Assertion) { assert_same_bytes(expected, actual) }
     assert_includes error.message, "Bytes differ (expected 16 bytes, got 16)"
-    assert_includes error.message, "diff around [0x34 0x35 0x36 0x37 0x38 0x39 0x61 0x62] at offset 12,"
+    assert_includes error.message, "diff at offset 12,"
     assert_includes error.message, "should have been [0x63 0x64 0x65 0x66]"
     assert_includes error.message, "but was [0x58 0x64 0x65 0x66]"
   end
@@ -33,7 +33,7 @@ class ByteComparatorTest < Minitest::Test
     assert_includes error.message, "but was [empty]"
 
     error = assert_raises(Minitest::Assertion) { assert_same_bytes("", "x") }
-    assert_includes error.message, "diff around [empty] at offset 0,"
+    assert_includes error.message, "diff at offset 0,"
   end
 
   def test_comparator_reports_offset_and_nothing_for_same_bytes

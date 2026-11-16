@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Compares two strings byte for byte, and describes where they differ - showing the offset,
-# a few bytes leading up to it and what the bytes should have been - instead of a diff of a binary blob
+# Compares two strings byte for byte, and describes where they differ - showing the offset and
+# what the bytes there should have been - instead of a diff of a binary blob
 class ByteComparator
   CONTEXT_BYTES = 8
   BLOCK_SIZE = 4096
@@ -30,10 +30,9 @@ class ByteComparator
   def describe_difference
     offset = first_difference_offset
     return unless offset
-    context_from = [offset - CONTEXT_BYTES, 0].max
     [
       "Bytes differ (expected #{@expected.bytesize} bytes, got #{@actual.bytesize})",
-      "diff around #{format_bytes(@expected.byteslice(context_from...offset))} at offset #{offset},",
+      "diff at offset #{offset},",
       "should have been #{format_bytes(@expected.byteslice(offset, CONTEXT_BYTES))}",
       "but was #{format_bytes(@actual.byteslice(offset, CONTEXT_BYTES))}"
     ].join("\n")
