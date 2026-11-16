@@ -107,6 +107,18 @@ module ServeByteRange
   def self.serve_sequence(env, sequence, etag: sequence.etag, **options, &segment_serving_block); end
 
   class BlockWritableWithLimit
+    # sord duck - #call looks like a duck type, replacing with untyped
+    # sord duck - #call looks like a duck type, replacing with untyped
+    # Yields a writable which passes the bytes on to `sink`, and makes sure exactly `limit` bytes got written
+    # 
+    # _@param_ `limit` — how many bytes have to be written
+    # 
+    # _@param_ `sink` — receives the written bytes
+    # 
+    # _@param_ `label` — what is being written, for the error messages. Can be a callable returning the String, so that the String only gets built when there is an error
+    sig { params(limit: Integer, sink: T.untyped, label: T.any(String, T.untyped)).void }
+    def self.write_exactly(limit, sink, label: "range"); end
+
     # sord omit - no YARD type given for "limit", using untyped
     # sord omit - no YARD type given for "label:", using untyped
     sig { params(limit: T.untyped, label: T.untyped, block_that_accepts_writes: T.untyped).void }
@@ -120,6 +132,10 @@ module ServeByteRange
     # sord omit - no YARD return type given, using untyped
     sig { returns(T.untyped) }
     def verify!; end
+
+    # sord omit - no YARD return type given, using untyped
+    sig { returns(T.untyped) }
+    def label; end
   end
 
   class ByteRangeBody

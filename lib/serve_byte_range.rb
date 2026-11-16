@@ -5,6 +5,20 @@ require_relative "serve_byte_range/sequence"
 
 module ServeByteRange
   class BlockWritableWithLimit
+    # Yields a writable which passes the bytes on to `sink`, and makes sure exactly `limit` bytes got written
+    #
+    # @param limit[Integer] how many bytes have to be written
+    # @param sink[#call] receives the written bytes
+    # @param label[String,#call] what is being written, for the error messages. Can be a callable
+    #   returning the String, so that the String only gets built when there is an error
+    # @yield [io[BlockWritableWithLimit]]
+    # @return [void]
+    def self.write_exactly(limit, sink, label: "range")
+      writable = new(limit, label: label, &sink)
+      yield(writable)
+      writable.verify!
+    end
+
     def initialize(limit, label: "range", &block_that_accepts_writes)
       @limit = limit
       @label = label
@@ -15,7 +29,7 @@ module ServeByteRange
     def write(string)
       return 0 if string.empty?
       would_have_output = @written + string.bytesize
-      raise "You are trying to write more than advertised - #{would_have_output} bytes, the limit for this #{@label} is #{@limit}" if @limit < would_have_output
+      raise "You are trying to write more than advertised - #{would_have_output} bytes, the limit for this #{label} is #{@limit}" if @limit < would_have_output
       @written += string.bytesize
       # Only a frozen string can be passed on without copying. IO.copy_stream reuses one buffer for all
       # of its writes, and Rack::ETag and friends hold on to the chunks they get
@@ -25,7 +39,13 @@ module ServeByteRange
     end
 
     def verify!
-      raise "You wrote #{@written} bytes but the #{@label} requires #{@limit} bytes" unless @written == @limit
+      raise "You wrote #{@written} bytes but the #{label} requires #{@limit} bytes" unless @written == @limit
+    end
+
+    private
+
+    def label
+      @label.respond_to?(:call) ? @label.call : @label
     end
   end
 
@@ -42,9 +62,7 @@ module ServeByteRange
     end
 
     def each(&blk)
-      writable_for_range_bytes = BlockWritableWithLimit.new(@http_range.size, &blk)
-      @serving_block.call(@http_range, writable_for_range_bytes)
-      writable_for_range_bytes.verify!
+      BlockWritableWithLimit.write_exactly(@http_range.size, blk) { |io| @serving_block.call(@http_range, io) }
     end
 
     def content_length
@@ -134,9 +152,7 @@ module ServeByteRange
     def each(&blk)
       @http_ranges.each_with_index do |range, part_i|
         yield(part_header(range, part_i))
-        writable_for_range_bytes = BlockWritableWithLimit.new(range.size, &blk)
-        @serving_block.call(range, writable_for_range_bytes)
-        writable_for_range_bytes.verify!
+        BlockWritableWithLimit.write_exactly(range.size, blk) { |io| @serving_block.call(range, io) }
       end
       yield(trailer)
     end
@@ -347,10 +363,10 @@ module ServeByteRange
   def self.serve_sequence(env, sequence, etag: sequence.etag, **options, &segment_serving_block)
     serve_ranges(env, resource_size: sequence.size, etag: etag, **options) do |range, io|
       sequence.each_in_range(range) do |segment, range_in_segment|
-        label = "segment (#{segment.class}, bytes #{range_in_segment.begin}-#{range_in_segment.end} of it)"
-        segment_io = BlockWritableWithLimit.new(range_in_segment.size, label: label) { |bytes| io.write(bytes) }
-        segment_serving_block.call(segment, range_in_segment, segment_io)
-        segment_io.verify!
+        label = -> { "segment (#{segment.class}, bytes #{range_in_segment.begin}-#{range_in_segment.end} of it)" }
+        BlockWritableWithLimit.write_exactly(range_in_segment.size, io.method(:write), label: label) do |segment_io|
+          segment_serving_block.call(segment, range_in_segment, segment_io)
+        end
       end
     end
   end
