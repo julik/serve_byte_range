@@ -31,7 +31,7 @@ class ByteComparator
     offset = first_difference_offset
     return unless offset
     [
-      "Bytes differ (expected #{@expected.bytesize} bytes, got #{@actual.bytesize})",
+      (@expected.bytesize == @actual.bytesize) ? "Bytes differ" : "Bytes differ (expected #{@expected.bytesize} bytes, got #{@actual.bytesize})",
       "diff at offset #{offset},",
       "should have been #{format_bytes(@expected.byteslice(offset, CONTEXT_BYTES))}",
       "but was #{format_bytes(@actual.byteslice(offset, CONTEXT_BYTES))}"
