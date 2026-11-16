@@ -27,7 +27,8 @@ Gem::Specification.new do |spec|
   spec.rdoc_options = ["--markup", "markdown", "--main", "README.md"]
   spec.extra_rdoc_files = ["README.md"]
 
-  spec.add_dependency "rack", ">= 1.0"
+  spec.add_dependency "rack", ">= 2.0"
+  spec.add_dependency "base64"
 
   spec.add_development_dependency "minitest"
   spec.add_development_dependency "rake"
