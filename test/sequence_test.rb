@@ -150,4 +150,18 @@ class SequenceTest < Minitest::Test
     status, _, _ = ServeByteRange.serve_sequence({"HTTP_IF_NONE_MATCH" => seq.etag}, seq) { |segment, r, io| io.write(segment[r]) }
     assert_equal 304, status
   end
+
+  def test_etag_includes_segment_sizes
+    a = ServeByteRange::Sequence.new.add_segment(:obj, size: 10, etag: "v1")
+    b = ServeByteRange::Sequence.new.add_segment(:obj, size: 20, etag: "v1")
+    refute_equal a.etag, b.etag
+  end
+
+  def test_etag_changes_when_segments_are_added_after_it_was_computed
+    seq = ServeByteRange::Sequence.new("abc")
+    etag_before = seq.etag
+    seq << "def"
+    refute_equal etag_before, seq.etag
+    assert_same seq.etag, seq.etag
+  end
 end

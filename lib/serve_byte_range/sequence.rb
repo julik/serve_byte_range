@@ -41,6 +41,7 @@ module ServeByteRange
       return self if size.zero?
       @intervals << Interval.new(segment, size, @size, etag.to_s, etag.nil?)
       @size += size
+      @etag = nil
       self
     end
 
@@ -67,8 +68,11 @@ module ServeByteRange
     # @return [String] a quoted ETag derived from the ETags of all the segments, weak (`W/"..."`)
     #   if any segment was added without an `etag:`
     def etag
-      digest = '"%s"' % Digest::SHA1.hexdigest(@intervals.map(&:etag).join("\0"))
-      strong_etag? ? digest : "W/#{digest}"
+      @etag ||= begin
+        # The size goes in too, since the same validator with a different size is a different representation
+        digest = '"%s"' % Digest::SHA1.hexdigest(@intervals.map { |iv| "#{iv.size}:#{iv.etag}" }.join("\0"))
+        strong_etag? ? digest : "W/#{digest}"
+      end
     end
 
     # @return [Boolean] whether every segment has an ETag of its own
