@@ -18,7 +18,7 @@ class ByteComparatorTest < Minitest::Test
     expected = "0123456789abcdef".b
     actual = "0123456789abXdef".b
     error = assert_raises(Minitest::Assertion) { assert_same_bytes(expected, actual) }
-    assert_includes error.message, "Bytes differ (expected 16 bytes, got 16)"
+    assert error.message.start_with?("Bytes differ\n") # same length, so no sizes
     assert_includes error.message, "diff at offset 12,"
     assert_includes error.message, "should have been [0x63 0x64 0x65 0x66]"
     assert_includes error.message, "but was [0x58 0x64 0x65 0x66]"
@@ -27,7 +27,7 @@ class ByteComparatorTest < Minitest::Test
   def test_describes_truncation_and_differences_past_the_first_block
     expected = ("a" * 5000 + "bc").b
     error = assert_raises(Minitest::Assertion) { assert_same_bytes(expected, "a" * 5000, "Custom") }
-    assert error.message.start_with?("Custom\n")
+    assert error.message.start_with?("Custom\nBytes differ (expected 5002 bytes, got 5000)\n")
     assert_includes error.message, "at offset 5000,"
     assert_includes error.message, "should have been [0x62 0x63]"
     assert_includes error.message, "but was [empty]"
