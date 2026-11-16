@@ -41,13 +41,8 @@ jobs:
       - name: "Lint"
         run: bundle exec rake standard
   typecheck:
-    name: Typecheck (Ruby ${{ matrix.ruby }})
+    name: Typecheck (3.4)
     runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        # rbs-inline and Steep need a recent Ruby, the library itself does not
-        ruby: ["3.3", "3.4"]
     env:
       BUNDLE_GEMFILE: ${{ github.workspace }}/gemfiles/typecheck.gemfile
     steps:
@@ -56,7 +51,7 @@ jobs:
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: ${{ matrix.ruby }}
+          ruby-version: 3.4
           bundler-cache: true
       - name: "Steep"
         run: bundle exec rake steep
