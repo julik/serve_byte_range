@@ -186,4 +186,25 @@ class SequenceTest < Minitest::Test
     assert_raises(ArgumentError) { seq.each_in_range(Range.new(1, nil)).to_a }
     assert_raises(ArgumentError) { seq.each_in_range(Range.new(nil, 1)).to_a }
   end
+
+  def test_segments_can_not_change_after_being_added
+    str = +"hello"
+    seq = ServeByteRange::Sequence.new(str)
+    str << " world"
+    assert_equal 5, seq.size
+    assert_equal [["hello", 0..4]], seq.each_in_range(0..4).to_a
+
+    inner = ServeByteRange::Sequence.new("ab")
+    outer = ServeByteRange::Sequence.new(inner, "cd")
+    assert inner.frozen?
+    assert_raises(FrozenError) { inner << "XY" }
+    assert_equal 4, outer.size
+    assert_equal 2, inner.size
+  end
+
+  def test_frozen_sequence_keeps_its_etag
+    seq = ServeByteRange::Sequence.new("abc").freeze
+    assert_match(/\A"[0-9a-f]{40}"\z/, seq.etag)
+    assert_raises(FrozenError) { seq.add_segment(:x, size: 1, etag: "x") }
+  end
 end

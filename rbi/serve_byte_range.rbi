@@ -288,7 +288,8 @@ module ServeByteRange
     sig { params(segments: T::Array[T.untyped]).void }
     def initialize(*segments); end
 
-    # Adds a segment of a given size. Segments of zero size are skipped.
+    # Adds a segment of a given size. Segments of zero size are skipped. The size and ETag are taken
+    # as they are now, so a String gets copied and frozen, and a Sequence gets frozen when added.
     # 
     # _@param_ `segment` — any object, it gets yielded back when serving
     # 
@@ -313,6 +314,10 @@ module ServeByteRange
     # if any segment was added without an `etag:`
     sig { returns(String) }
     def etag; end
+
+    # Freezes the Sequence, so that no more segments can be added
+    sig { returns(T.self_type) }
+    def freeze; end
 
     # _@return_ — whether every segment has an ETag of its own
     sig { returns(T::Boolean) }
