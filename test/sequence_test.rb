@@ -6,9 +6,12 @@ Bundler.setup
 require_relative "../lib/serve_byte_range"
 require "minitest"
 require "minitest/autorun"
+require_relative "support/bytes_assertions"
 require "stringio"
 
 class SequenceTest < Minitest::Test
+  include BytesAssertions
+
   # Stands in for an object in remote storage which supports ranged GETs
   RemoteObject = Struct.new(:bytes) do
     def size
@@ -55,7 +58,7 @@ class SequenceTest < Minitest::Test
     ranges.each do |range|
       out = +"".b
       seq.each_in_range(range) { |segment, range_in_segment| out << fetch(segment, range_in_segment) }
-      assert_equal expected.byteslice(range), out, "Mismatch for #{range}"
+      assert_same_bytes expected.byteslice(range), out, "Mismatch for #{range}"
     end
   end
 
@@ -97,12 +100,12 @@ class SequenceTest < Minitest::Test
     assert_equal 200, status
     assert_equal seq.etag, headers["ETag"]
     assert_equal expected.bytesize.to_s, headers["Content-Length"]
-    assert_equal expected, read.call(body)
+    assert_same_bytes expected, read.call(body)
 
     status, headers, body = serve.call("HTTP_RANGE" => "bytes=195-215")
     assert_equal 206, status
     assert_equal "bytes 195-215/#{seq.size}", headers["Content-Range"]
-    assert_equal expected.byteslice(195..215), read.call(body)
+    assert_same_bytes expected.byteslice(195..215), read.call(body)
 
     status, headers, body = serve.call("HTTP_RANGE" => "bytes=0-3,201-204", "HTTP_IF_RANGE" => seq.etag)
     assert_equal 206, status
