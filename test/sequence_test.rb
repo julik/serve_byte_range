@@ -207,4 +207,15 @@ class SequenceTest < Minitest::Test
     assert_match(/\A"[0-9a-f]{40}"\z/, seq.etag)
     assert_raises(FrozenError) { seq.add_segment(:x, size: 1, etag: "x") }
   end
+
+  def test_segment_etags_are_compared_without_quotes
+    quoted = ServeByteRange::Sequence.new.add_segment(:obj, size: 3, etag: '"abc"')
+    bare = ServeByteRange::Sequence.new.add_segment(:obj, size: 3, etag: "abc")
+    assert_equal bare.etag, quoted.etag
+    assert quoted.strong_etag?
+
+    weak = ServeByteRange::Sequence.new.add_segment(:obj, size: 3, etag: 'W/"abc"')
+    refute weak.strong_etag?
+    assert_equal "W/#{bare.etag}", weak.etag
+  end
 end

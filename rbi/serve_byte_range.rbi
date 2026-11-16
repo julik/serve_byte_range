@@ -295,7 +295,7 @@ module ServeByteRange
     # 
     # _@param_ `size` — the size of the segment in bytes
     # 
-    # _@param_ `etag` — a validator for the segment, which goes into the ETag of the Sequence. Without it only the size is known, which won't catch content changes that keep the size the same - so the ETag of the Sequence becomes weak.
+    # _@param_ `etag` — a validator for the segment, which goes into the ETag of the Sequence. Without it only the size is known, which won't catch content changes that keep the size the same - so the ETag of the Sequence becomes weak. Can be quoted (as S3 returns it) or not, and a weak one (`W/"..."`) makes the ETag of the Sequence weak too.
     sig { params(segment: Object, size: Integer, etag: T.nilable(T.any(String, Integer))).returns(T.self_type) }
     def add_segment(segment, size:, etag: nil); end
 

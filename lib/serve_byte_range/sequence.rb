@@ -35,14 +35,17 @@ module ServeByteRange
     # @param size[Integer] the size of the segment in bytes
     # @param etag[String,Integer,nil] a validator for the segment, which goes into the ETag of the Sequence.
     #   Without it only the size is known, which won't catch content changes that keep the size the same -
-    #   so the ETag of the Sequence becomes weak.
+    #   so the ETag of the Sequence becomes weak. Can be quoted (as S3 returns it) or not, and
+    #   a weak one (`W/"..."`) makes the ETag of the Sequence weak too.
     # @return [self]
     def add_segment(segment, size:, etag: nil)
       raise ArgumentError, "Segment size must be an Integer >= 0, but was #{size.inspect}" unless size.is_a?(Integer) && size >= 0
       return self if size.zero?
       segment = segment.dup.freeze if segment.is_a?(String) && !segment.frozen?
       segment.freeze if segment.is_a?(Sequence)
-      @intervals << Interval.new(segment, size, @size, etag.to_s, etag.nil?)
+      weak = etag.nil? || etag.to_s.start_with?("W/")
+      opaque_etag = etag.to_s.delete_prefix("W/").delete_prefix('"').delete_suffix('"')
+      @intervals << Interval.new(segment, size, @size, opaque_etag, weak)
       @size += size
       @etag = nil
       self
