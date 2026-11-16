@@ -6,6 +6,7 @@ Bundler.setup
 require_relative "../lib/serve_byte_range"
 require "minitest"
 require "minitest/autorun"
+require "tempfile"
 
 class ServeByteRangeTest < Minitest::Test
   def test_serves_whole_body
@@ -281,18 +282,30 @@ class ServeByteRangeTest < Minitest::Test
     refute headers.key?("ETag")
   end
 
-  def test_passes_binary_strings_through_without_copying
+  def test_passes_only_frozen_binary_strings_through_without_copying
     yielded = []
-    writable = ServeByteRange::BlockWritableWithLimit.new(8) { |chunk| yielded << chunk }
-    binary = "abcd".b
+    writable = ServeByteRange::BlockWritableWithLimit.new(12) { |chunk| yielded << chunk }
+    frozen_binary = "abcd".b.freeze
+    binary_buffer = "efgh".b
     utf8 = "éé"
-    writable.write(binary)
-    writable.write(utf8)
+    [frozen_binary, binary_buffer, utf8].each { |str| writable.write(str) }
     writable.verify!
 
-    assert_same binary, yielded[0]
-    refute_same utf8, yielded[1]
-    assert_equal Encoding::BINARY, yielded[1].encoding
-    assert_equal Encoding::UTF_8, utf8.encoding # the caller's string must not get re-encoded
+    assert_same frozen_binary, yielded[0]
+    refute_same binary_buffer, yielded[1] # a reused buffer, as in IO.copy_stream, must get copied
+    refute_same utf8, yielded[2]
+    assert yielded.all? { |chunk| chunk.encoding == Encoding::BINARY }
+    assert_equal Encoding::UTF_8, utf8.encoding
+  end
+
+  def test_chunks_from_copy_stream_survive_being_retained
+    bytes = Random.new(Minitest.seed).bytes(100_000)
+    source = Tempfile.new("source", binmode: true)
+    source.write(bytes)
+    source.flush
+    _, _, body = ServeByteRange.serve_ranges({}, resource_size: bytes.bytesize) { |range, io| IO.copy_stream(source, io, range.size, range.begin) }
+    retained = []
+    body.each { |chunk| retained << chunk } # what Rack::ETag does
+    assert_equal bytes, retained.join
   end
 end
