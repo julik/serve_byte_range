@@ -40,3 +40,27 @@ jobs:
           bundler-cache: true
       - name: "Lint"
         run: bundle exec rake standard
+  typecheck:
+    name: Typecheck (Ruby ${{ matrix.ruby }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # rbs-inline and Steep need a recent Ruby, the library itself does not
+        ruby: ["3.3", "3.4"]
+    env:
+      BUNDLE_GEMFILE: ${{ github.workspace }}/gemfiles/typecheck.gemfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: "Steep"
+        run: bundle exec rake steep
+      - name: "Signatures in sig/ are up to date"
+        run: |
+          git add --intent-to-add sig
+          git diff --exit-code sig || (echo "Run 'rake rbs' and commit the changes in sig/" && exit 1)
