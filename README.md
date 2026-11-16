@@ -77,3 +77,12 @@ BUNDLE_GEMFILE=gemfiles/rack_2.gemfile bundle exec rake test
 ```
 
 CI runs the tests against both `gemfiles/rack_2.gemfile` and `gemfiles/rack_3.gemfile`.
+
+Types are written inline as [rbs-inline](https://github.com/soutaro/rbs-inline) annotations, and the RBS signatures in `sig/` are generated from them - so after changing a signature, regenerate them and typecheck with Steep. rbs-inline and Steep need a recent Ruby, so they live in a Gemfile of their own:
+
+```shell
+BUNDLE_GEMFILE=gemfiles/typecheck.gemfile bundle install
+bundle exec rake steep # runs `rake rbs` first
+```
+
+API docs are RDoc with Markdown markup, `bundle exec rake rdoc` writes them into `doc/`.
